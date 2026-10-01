@@ -2846,7 +2846,9 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === "GET" && req.url === "/api/v1/me/balance") {
-    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const actorId =
+      (await resolveSessionActor(req)) ??
+      (req.headers["x-actor-id"] as string | undefined);
     if (!actorId) {
       reply(res, 401, {
         error: {
@@ -2873,7 +2875,9 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === "POST" && req.url === "/api/v1/payment-intents") {
-    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const actorId =
+      (await resolveSessionActor(req)) ??
+      (req.headers["x-actor-id"] as string | undefined);
     const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
     const input = await body(req);
     if (!actorId || !idempotencyKey) {

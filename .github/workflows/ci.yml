@@ -27,7 +27,7 @@ jobs:
           pnpm --version
           pnpm config get store-dir
           pnpm config get registry
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --fetch-retries=5 --fetch-retry-factor=2 --fetch-timeout=120000
       - run: pnpm migration-from-zero
         env:
           DATABASE_URL: postgresql://vemtas:vemtas@localhost:5433/vemtas_test

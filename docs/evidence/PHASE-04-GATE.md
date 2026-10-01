@@ -36,4 +36,16 @@ The integration harness now verifies ledger-derived balance projection: a 1,000 
 
 The reproducible HTTP harness starts the API directly with Node/tsx and verifies `/ready` HTTP 200, unauthenticated reconciliation HTTP 403 and authenticated platform reconciliation HTTP 201 with `MATCHED` and zero difference.
 
+Latest runtime evidence (2026-09-30):
+
+- `pnpm lint` — PASS across 16 packages.
+- `pnpm typecheck` — PASS across 16 packages.
+- `pnpm test` — PASS across 16 packages (unit suites green).
+- `pnpm build` — PASS across 16 packages, including all four Next applications.
+- `pnpm test:integration` — PASS against local PostgreSQL, including HTTP capture, idempotency collisions, rollback, webhook authentication, receipt authorization and two competing captures (one `201`, one `409`, final balance `100`).
+- Clean database proof — PASS: new `vemtas_clean` database, `pnpm migration-from-zero`, ten migrations applied and 35 public tables created.
+- Cash refund correction — PASS by inspection and regression suite: cash refunds no longer mint wallet credit.
+
+The phase remains `IN_PROGRESS`; these results strengthen runtime evidence but do not prove real authentication, provider reconciliation processing, crash recovery or production readiness.
+
 Code inspection also identifies unresolved security/correctness issues: caller-supplied actor headers are trusted; refund handlers do not verify merchant permission; replay checks do not compare actor and payload; cash refunds credit a wallet without an original wallet debit; ledger immutability and balance are not enforced by database constraints. These require correction and production-path tests before PASS.

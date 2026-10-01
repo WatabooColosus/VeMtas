@@ -102,6 +102,45 @@ const server = createServer(async (req, res) => {
       return;
     }
   }
+  if (
+    req.method === "POST" &&
+    req.url?.match(/^\/api\/v1\/me\/credentials\/[^/]+\/block$/)
+  ) {
+    const credentialId = req.url.split("/")[5];
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const result = await pool.query(
+      "UPDATE credentials SET status='BLOCKED', blocked_at=now() WHERE id=$1 AND user_id=$2 AND status='ACTIVE' RETURNING id,status,blocked_at",
+      [credentialId, actorId],
+    );
+    if (!result.rowCount) {
+      reply(res, 404, {
+        error: {
+          code: "CREDENTIAL_NOT_FOUND_OR_INVALID",
+          message: "Credential unavailable",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    await pool.query(
+      "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialBlocked','CREDENTIAL',$2,$3)",
+      [actorId, credentialId, cid],
+    );
+    reply(res, 200, { data: result.rows[0] });
+    return;
+  }
   reply(res, 404, {
     error: {
       code: "NOT_FOUND",

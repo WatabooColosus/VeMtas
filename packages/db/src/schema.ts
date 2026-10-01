@@ -1,3 +1,23 @@
-import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
-export const outboxEvents = pgTable("outbox_events", { id: serial("id").primaryKey(), eventType: text("event_type").notNull(), payload: jsonb("payload").notNull(), status: text("status").notNull().default("PENDING"), attempts: integer("attempts").notNull().default(0), availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(), processedAt: timestamp("processed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow() });
+import {
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  integer,
+  jsonb,
+} from "drizzle-orm/pg-core";
+export const outboxEvents = pgTable("outbox_events", {
+  id: serial("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull(),
+  status: text("status").notNull().default("PENDING"),
+  attempts: integer("attempts").notNull().default(0),
+  availableAt: timestamp("available_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 export const schema = { outboxEvents };

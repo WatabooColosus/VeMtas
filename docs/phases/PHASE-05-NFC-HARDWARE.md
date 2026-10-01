@@ -1,6 +1,6 @@
 # PHASE-05 — NFC Hardware Pilot
 
-Status: NOT_STARTED
+Status: IN_PROGRESS
 
 ## Entregables
 

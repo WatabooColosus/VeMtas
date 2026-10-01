@@ -2543,6 +2543,135 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+  const refundLink = req.url?.match(/^\/api\/v1\/payments\/([^/]+)\/refunds$/);
+  if (req.method === "POST" && refundLink) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
+    const input = await body(req);
+    if (!actorId || !idempotencyKey) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor and idempotency-key required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const existing = await client.query(
+        "SELECT id,original_payment_id,amount_minor,reason_code,status,created_at FROM refunds WHERE idempotency_key=$1",
+        [idempotencyKey],
+      );
+      if (existing.rowCount) {
+        await client.query("ROLLBACK");
+        reply(res, 200, { data: existing.rows[0], idempotent: true });
+        return;
+      }
+      const payment = await client.query(
+        "SELECT cp.id,cp.amount_minor,cp.currency,s.customer_user_id FROM cash_payments cp JOIN sales s ON s.id=cp.sale_id WHERE cp.id=$1 AND cp.status='CAPTURED' FOR UPDATE",
+        [refundLink[1]],
+      );
+      if (!payment.rowCount) {
+        await client.query("ROLLBACK");
+        reply(res, 404, {
+          error: {
+            code: "PAYMENT_NOT_FOUND",
+            message: "Captured payment not found",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const amount = Number(input.amount_minor ?? payment.rows[0].amount_minor);
+      if (!Number.isSafeInteger(amount) || amount <= 0) {
+        await client.query("ROLLBACK");
+        reply(res, 400, {
+          error: {
+            code: "INVALID_INPUT",
+            message: "positive amount_minor is required",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const refunded = await client.query(
+        "SELECT COALESCE(sum(amount_minor),0)::bigint AS total FROM refunds WHERE original_payment_id=$1 AND status='POSTED'",
+        [refundLink[1]],
+      );
+      if (
+        BigInt(refunded.rows[0].total) + BigInt(amount) >
+        BigInt(payment.rows[0].amount_minor)
+      ) {
+        await client.query("ROLLBACK");
+        reply(res, 409, {
+          error: {
+            code: "REFUND_EXCEEDS_PAYMENT",
+            message: "Refund exceeds captured payment",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const refund = await client.query(
+        "INSERT INTO refunds (original_payment_id,amount_minor,reason_code,status,idempotency_key) VALUES ($1,$2,$3,'POSTED',$4) RETURNING id,original_payment_id,amount_minor,reason_code,status,created_at",
+        [
+          refundLink[1],
+          amount.toString(),
+          typeof input.reason_code === "string"
+            ? input.reason_code
+            : "CUSTOMER_REQUEST",
+          idempotencyKey,
+        ],
+      );
+      const userId = payment.rows[0].customer_user_id ?? actorId;
+      const userAccount = await client.query(
+        "INSERT INTO financial_accounts (owner_type,owner_id,account_type,currency) VALUES ('USER',$1,'USER_AVAILABLE',$2) ON CONFLICT (owner_type,owner_id,account_type,currency) DO UPDATE SET status='ACTIVE' RETURNING id",
+        [userId, payment.rows[0].currency],
+      );
+      const revenue = await client.query(
+        "INSERT INTO financial_accounts (owner_type,owner_id,account_type,currency) VALUES ('SYSTEM',$1,'VEMTAS_REVENUE',$2) ON CONFLICT (owner_type,owner_id,account_type,currency) DO UPDATE SET status='ACTIVE' RETURNING id",
+        [actorId, payment.rows[0].currency],
+      );
+      const txn = await client.query(
+        "INSERT INTO ledger_transactions (transaction_type,reference_type,reference_id,idempotency_key) VALUES ('REFUND','REFUND',$1,$2) RETURNING id",
+        [refund.rows[0].id, idempotencyKey],
+      );
+      await client.query(
+        "INSERT INTO ledger_entries (ledger_transaction_id,financial_account_id,direction,amount_minor,currency) VALUES ($1,$2,'DEBIT',$3,$4),($1,$5,'CREDIT',$3,$4)",
+        [
+          txn.rows[0].id,
+          revenue.rows[0].id,
+          amount.toString(),
+          payment.rows[0].currency,
+          userAccount.rows[0].id,
+        ],
+      );
+      await client.query("COMMIT");
+      reply(res, 201, { data: refund.rows[0] });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if ((error as { code?: string }).code === "23505")
+        reply(res, 409, {
+          error: {
+            code: "IDEMPOTENCY_COLLISION",
+            message: "Idempotency key collision",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+      else throw error;
+    } finally {
+      client.release();
+    }
+    return;
+  }
   reply(res, 404, {
     error: {
       code: "NOT_FOUND",

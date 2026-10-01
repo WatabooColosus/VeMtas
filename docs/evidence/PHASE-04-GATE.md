@@ -7,6 +7,7 @@ Implemented:
 - PostgreSQL schema for financial accounts, append-only ledger transactions/entries, mock topups and refunds.
 - Ledger domain invariant requiring positive, balanced debit/credit entries.
 - Mock top-up endpoint with idempotency key handling and no external provider.
+- Refund endpoint with idempotency, captured-payment bounds and balanced compensating ledger entries.
 
 Current verification:
 

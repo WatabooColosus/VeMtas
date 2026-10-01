@@ -1,19 +1,27 @@
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-const child = spawn("pnpm.cmd", ["--filter", "@vemtas/api", "dev"], {
-  cwd: fileURLToPath(new URL("../../..", import.meta.url)),
-  shell: true,
-  env: {
-    ...process.env,
-    DATABASE_URL:
-      process.env.TEST_DATABASE_URL ??
-      "postgresql://vemtas:vemtas@localhost:5433/vemtas_test",
-    API_PORT: "3001",
+const root = fileURLToPath(new URL("../../..", import.meta.url));
+const child = spawn(
+  process.execPath,
+  [
+    resolve(root, "node_modules/tsx/dist/cli.mjs"),
+    resolve(root, "apps/api/src/server.ts"),
+  ],
+  {
+    cwd: root,
+    env: {
+      ...process.env,
+      DATABASE_URL:
+        process.env.TEST_DATABASE_URL ??
+        "postgresql://vemtas:vemtas@localhost:5433/vemtas_test",
+      API_PORT: "3001",
+    },
+    stdio: "ignore",
   },
-  stdio: "ignore",
-});
+);
 try {
   let ready = false;
   for (let attempt = 0; attempt < 30 && !ready; attempt++) {

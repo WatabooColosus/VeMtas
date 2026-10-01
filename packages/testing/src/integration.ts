@@ -1,0 +1,1 @@
+import { Pool } from "pg"; const pool=new Pool({connectionString:process.env.TEST_DATABASE_URL??"postgresql://vemtas:vemtas@localhost:5433/vemtas_test"}); try{await pool.query("select 1");console.log("integration harness: PostgreSQL reachable")}finally{await pool.end()}

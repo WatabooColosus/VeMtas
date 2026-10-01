@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vemtas
+      POSTGRES_PASSWORD: vemtas
+      POSTGRES_DB: vemtas_dev
+    ports:
+      - "5432:5432"
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vemtas
+      POSTGRES_PASSWORD: vemtas
+      POSTGRES_DB: vemtas_test
+    ports:
+      - "5433:5432"

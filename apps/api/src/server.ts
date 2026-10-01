@@ -159,6 +159,26 @@ const server = createServer(async (req, res) => {
     reply(res, 200, { data: revoked.rows[0] });
     return;
   }
+  if (req.method === "GET" && req.url === "/api/v1/auth/me") {
+    const actorId = await resolveSessionActor(req);
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Bearer session required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const user = await pool.query(
+      "SELECT id,primary_email,status,created_at FROM users WHERE id=$1",
+      [actorId],
+    );
+    reply(res, 200, { data: user.rows[0] });
+    return;
+  }
   if (
     req.method === "POST" &&
     req.url?.match(/^\/api\/v1\/me\/credentials\/[^/]+\/block$/)

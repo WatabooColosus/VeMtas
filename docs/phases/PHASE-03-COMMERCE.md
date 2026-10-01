@@ -1,6 +1,6 @@
 # PHASE-03 — Catalog + Cash Sales
 
-Status: NOT_STARTED
+Status: IN_PROGRESS
 
 ## Entregables
 

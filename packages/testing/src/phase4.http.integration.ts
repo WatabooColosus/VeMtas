@@ -76,6 +76,11 @@ try {
       `session registration failed: ${JSON.stringify(registeredBody)}`,
     );
   const bearer = { authorization: `Bearer ${registeredBody.session.token}` };
+  const sessionMe = await fetch("http://127.0.0.1:39147/api/v1/auth/me", {
+    headers: bearer,
+  });
+  if (sessionMe.status !== 200)
+    throw new Error(`session identity failed: ${await sessionMe.text()}`);
   const revoked = await fetch(
     "http://127.0.0.1:39147/api/v1/auth/sessions/revoke",
     {

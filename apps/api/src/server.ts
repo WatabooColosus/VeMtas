@@ -2025,20 +2025,41 @@ const server = createServer(async (req, res) => {
       typeof input.provider !== "string" ||
       typeof input.period !== "string" ||
       !Number.isSafeInteger(input.expected_minor) ||
-      !Number.isSafeInteger(input.observed_minor)
+      (input.observed_minor !== undefined &&
+        !Number.isSafeInteger(input.observed_minor))
     ) {
       reply(res, 400, {
         error: {
           code: "INVALID_INPUT",
           message:
-            "provider, period, expected_minor and observed_minor are required",
+            "provider, period and expected_minor are required; observed_minor is optional for ledger-derived reconciliation",
           correlation_id: cid,
           details: {},
         },
       });
       return;
     }
-    const difference = input.observed_minor - input.expected_minor;
+    const observed =
+      input.observed_minor ??
+      Number(
+        (
+          await pool.query(
+            "SELECT COALESCE(sum(CASE WHEN direction='CREDIT' THEN amount_minor ELSE -amount_minor END),0)::bigint AS observed_minor FROM ledger_entries le JOIN ledger_transactions lt ON lt.id=le.ledger_transaction_id WHERE lt.status='POSTED'",
+          )
+        ).rows[0].observed_minor,
+      );
+    if (!Number.isSafeInteger(observed)) {
+      reply(res, 500, {
+        error: {
+          code: "RECONCILIATION_OVERFLOW",
+          message: "Observed ledger value exceeds safe integer range",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const difference = observed - input.expected_minor;
     try {
       const reconciliation = await pool.query(
         "INSERT INTO reconciliations (provider,period,expected_minor,observed_minor,difference_minor,status) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (provider,period) DO UPDATE SET expected_minor=EXCLUDED.expected_minor,observed_minor=EXCLUDED.observed_minor,difference_minor=EXCLUDED.difference_minor,status=EXCLUDED.status RETURNING id,provider,period,expected_minor,observed_minor,difference_minor,status,created_at",
@@ -2046,7 +2067,7 @@ const server = createServer(async (req, res) => {
           input.provider,
           input.period,
           input.expected_minor.toString(),
-          input.observed_minor.toString(),
+          observed.toString(),
           difference.toString(),
           difference === 0 ? "MATCHED" : "MISMATCH",
         ],

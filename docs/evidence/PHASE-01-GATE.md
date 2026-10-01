@@ -28,3 +28,6 @@ Scaffold only: workspace, applications, API, worker, packages, PostgreSQL, migra
 ## Gate decision
 
 Ready for human review. Do not begin PHASE-02 until this gate is approved and merged.
+
+Human approval: approved by user on 2026-09-30 (America/Bogota).
+

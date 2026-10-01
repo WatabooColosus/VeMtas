@@ -2661,7 +2661,9 @@ const server = createServer(async (req, res) => {
   }
   const refundLink = req.url?.match(/^\/api\/v1\/payments\/([^/]+)\/refunds$/);
   if (req.method === "POST" && refundLink) {
-    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const actorId =
+      (await resolveSessionActor(req)) ??
+      (req.headers["x-actor-id"] as string | undefined);
     const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
     const input = await body(req);
     if (!actorId || !idempotencyKey) {

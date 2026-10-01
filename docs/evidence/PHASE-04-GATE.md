@@ -30,4 +30,6 @@ The first money slice now includes `payment_intents`, `payments`, idempotent int
 
 Financial receipts (`RC`) are created transactionally during balance capture, exposed through `GET /receipts/:id`, and migration `0009` adds reconciliation records. Provider reconciliation execution remains pending.
 
+`POST /control/reconciliations` now records matched or mismatched periods with difference and audit event; it does not mutate ledger history.
+
 Code inspection also identifies unresolved security/correctness issues: caller-supplied actor headers are trusted; refund handlers do not verify merchant permission; replay checks do not compare actor and payload; cash refunds credit a wallet without an original wallet debit; ledger immutability and balance are not enforced by database constraints. These require correction and production-path tests before PASS.

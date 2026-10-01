@@ -1928,6 +1928,80 @@ const server = createServer(async (req, res) => {
     reply(res, 200, { data: events.rows });
     return;
   }
+  if (req.method === "POST" && req.url === "/api/v1/control/reconciliations") {
+    const platformActor = req.headers["x-platform-actor-id"] as
+      | string
+      | undefined;
+    const input = await body(req);
+    if (!platformActor) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Platform scope required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (
+      typeof input.provider !== "string" ||
+      typeof input.period !== "string" ||
+      !Number.isSafeInteger(input.expected_minor) ||
+      !Number.isSafeInteger(input.observed_minor)
+    ) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message:
+            "provider, period, expected_minor and observed_minor are required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const difference = input.observed_minor - input.expected_minor;
+    try {
+      const reconciliation = await pool.query(
+        "INSERT INTO reconciliations (provider,period,expected_minor,observed_minor,difference_minor,status) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (provider,period) DO UPDATE SET expected_minor=EXCLUDED.expected_minor,observed_minor=EXCLUDED.observed_minor,difference_minor=EXCLUDED.difference_minor,status=EXCLUDED.status RETURNING id,provider,period,expected_minor,observed_minor,difference_minor,status,created_at",
+        [
+          input.provider,
+          input.period,
+          input.expected_minor.toString(),
+          input.observed_minor.toString(),
+          difference.toString(),
+          difference === 0 ? "MATCHED" : "MISMATCH",
+        ],
+      );
+      await pool.query(
+        "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id,metadata_json) VALUES ('PLATFORM',$1,'ReconciliationRecorded','RECONCILIATION',$2,$3,$4)",
+        [
+          platformActor,
+          reconciliation.rows[0].id,
+          cid,
+          JSON.stringify({
+            provider: input.provider,
+            period: input.period,
+            difference_minor: String(difference),
+          }),
+        ],
+      );
+      reply(res, 201, { data: reconciliation.rows[0] });
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505")
+        reply(res, 409, {
+          error: {
+            code: "RECONCILIATION_CONFLICT",
+            message: "Reconciliation conflict",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+      else throw error;
+    }
+    return;
+  }
   const catalogProduct = req.url?.match(
     /^\/api\/v1\/businesses\/([^/]+)\/products$/,
   );

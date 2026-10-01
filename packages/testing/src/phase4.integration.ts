@@ -99,6 +99,22 @@ if (
   rollbackCheck.rows[0].transactions !== 0
 )
   throw new Error("failure injection left committed state");
+const committedTxn = await pool.query(
+  "SELECT id FROM ledger_transactions WHERE idempotency_key=$1",
+  [key],
+);
+const committedEntry = await pool.query(
+  "SELECT id FROM ledger_entries WHERE ledger_transaction_id=$1 LIMIT 1",
+  [committedTxn.rows[0].id],
+);
+try {
+  await pool.query("UPDATE ledger_entries SET amount_minor=999 WHERE id=$1", [
+    committedEntry.rows[0].id,
+  ]);
+  throw new Error("ledger mutation was accepted");
+} catch (error) {
+  if (!(error as { code?: string }).code) throw error;
+}
 console.log(
   `phase-04 integration: concurrent idempotency, webhook deduplication, rollback and balanced ledger PASS (${results.join(",")})`,
 );

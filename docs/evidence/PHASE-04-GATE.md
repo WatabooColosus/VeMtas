@@ -18,4 +18,12 @@ Current verification:
 - Webhook deduplication harness: concurrent duplicate provider event inserts produce one persisted event: PASS.
 - Failure injection harness: an injected exception rolls back top-up and ledger transaction state completely: PASS.
 
-Auto-gate approval: authorized by user. Concurrent idempotency, webhook deduplication, refunds, rollback injection and ledger balance evidence are green. PHASE-04 status: `PASS`.
+## Gate correction
+
+Status: `IN_PROGRESS`. The previous PASS declaration exceeded the available evidence and is withdrawn.
+
+The concurrency harness tests duplicate top-up inserts, not competing spends against one funded account. It bypasses the HTTP handlers. The injected exception tests explicit SQL rollback, not process crash recovery. Webhook tests prove inbox uniqueness, not payment processing exactly once. Migration runs were against an existing database; they do not independently prove an empty checkout/database gate.
+
+Missing deliverables include PaymentIntent, wallet Payment, balance projection, financial receipts and reconciliation. F06/F07/F08 and the full MONEY suite are not demonstrated.
+
+Code inspection also identifies unresolved security/correctness issues: caller-supplied actor headers are trusted; refund handlers do not verify merchant permission; replay checks do not compare actor and payload; cash refunds credit a wallet without an original wallet debit; ledger immutability and balance are not enforced by database constraints. These require correction and production-path tests before PASS.

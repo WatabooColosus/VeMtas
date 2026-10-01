@@ -21,6 +21,12 @@ jobs:
         with: { version: 11.19.0 }
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
+      - name: Inspect package manager
+        run: |
+          node --version
+          pnpm --version
+          pnpm config get store-dir
+          pnpm config get registry
       - run: pnpm install --frozen-lockfile
       - run: pnpm migration-from-zero
         env:

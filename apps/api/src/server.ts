@@ -2743,29 +2743,9 @@ const server = createServer(async (req, res) => {
           idempotencyKey,
         ],
       );
-      const userId = payment.rows[0].customer_user_id ?? actorId;
-      const userAccount = await client.query(
-        "INSERT INTO financial_accounts (owner_type,owner_id,account_type,currency) VALUES ('USER',$1,'USER_AVAILABLE',$2) ON CONFLICT (owner_type,owner_id,account_type,currency) DO UPDATE SET status='ACTIVE' RETURNING id",
-        [userId, payment.rows[0].currency],
-      );
-      const revenue = await client.query(
-        "INSERT INTO financial_accounts (owner_type,owner_id,account_type,currency) VALUES ('SYSTEM',$1,'VEMTAS_REVENUE',$2) ON CONFLICT (owner_type,owner_id,account_type,currency) DO UPDATE SET status='ACTIVE' RETURNING id",
-        [actorId, payment.rows[0].currency],
-      );
-      const txn = await client.query(
-        "INSERT INTO ledger_transactions (transaction_type,reference_type,reference_id,idempotency_key) VALUES ('REFUND','REFUND',$1,$2) RETURNING id",
-        [refund.rows[0].id, idempotencyKey],
-      );
-      await client.query(
-        "INSERT INTO ledger_entries (ledger_transaction_id,financial_account_id,direction,amount_minor,currency) VALUES ($1,$2,'DEBIT',$3,$4),($1,$5,'CREDIT',$3,$4)",
-        [
-          txn.rows[0].id,
-          revenue.rows[0].id,
-          amount.toString(),
-          payment.rows[0].currency,
-          userAccount.rows[0].id,
-        ],
-      );
+      // Cash refunds are recorded against the cash payment only. They must not
+      // mint wallet balance; wallet refunds require reversing the original
+      // wallet payment transaction and are implemented by the wallet flow.
       await client.query("COMMIT");
       reply(res, 201, { data: refund.rows[0] });
     } catch (error) {

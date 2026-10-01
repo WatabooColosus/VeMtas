@@ -55,6 +55,49 @@ try {
   }
   if (!ready || !output.includes("api_started"))
     throw new Error(`api did not become ready: ${output}`);
+  const sessionEmail = `session-${Date.now()}@example.test`;
+  const registered = await fetch(
+    "http://127.0.0.1:39147/api/v1/auth/register",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        primary_email: sessionEmail,
+        display_name: "Session Test",
+      }),
+    },
+  );
+  const registeredBody = await registered.json();
+  if (
+    registered.status !== 201 ||
+    typeof registeredBody.session?.token !== "string"
+  )
+    throw new Error(
+      `session registration failed: ${JSON.stringify(registeredBody)}`,
+    );
+  const bearer = { authorization: `Bearer ${registeredBody.session.token}` };
+  const revoked = await fetch(
+    "http://127.0.0.1:39147/api/v1/auth/sessions/revoke",
+    {
+      method: "POST",
+      headers: bearer,
+    },
+  );
+  if (revoked.status !== 200)
+    throw new Error(`session revoke failed: ${await revoked.text()}`);
+  const revokedBalance = await fetch(
+    "http://127.0.0.1:39147/api/v1/me/balance",
+    {
+      headers: bearer,
+    },
+  );
+  if (revokedBalance.status !== 401)
+    throw new Error(
+      `revoked session remained active: ${revokedBalance.status}`,
+    );
+  console.log(
+    "phase-04 HTTP integration: session issuance and revocation PASS",
+  );
   const unauthorized = await fetch(
     "http://127.0.0.1:39147/api/v1/control/reconciliations",
     {

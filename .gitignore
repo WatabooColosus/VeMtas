@@ -28,3 +28,4 @@ Thumbs.db
 secrets/
 credentials/
 .turbo/
+*.tsbuildinfo

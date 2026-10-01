@@ -180,6 +180,33 @@ try {
     console.log(
       "phase-04 HTTP integration: topup payload/actor collisions PASS",
     );
+    const capturable = await pool.query(
+      "SELECT id FROM payment_intents WHERE idempotency_key=$1",
+      [intentKey],
+    );
+    const capture = await fetch(
+      `http://127.0.0.1:39147/api/v1/payment-intents/${capturable.rows[0].id}/capture`,
+      {
+        method: "POST",
+        headers: {
+          "x-actor-id": user.rows[0].id,
+          "idempotency-key": `capture-${intentKey}`,
+        },
+      },
+    );
+    if (capture.status !== 201)
+      throw new Error(
+        `capture failed: ${capture.status} ${await capture.text()}`,
+      );
+    const projected = await fetch("http://127.0.0.1:39147/api/v1/me/balance", {
+      headers: { "x-actor-id": user.rows[0].id },
+    });
+    const balance = await projected.json();
+    if (balance.data.available_minor !== "400")
+      throw new Error(`capture balance wrong: ${JSON.stringify(balance)}`);
+    console.log(
+      "phase-04 HTTP integration: capture and projected balance PASS",
+    );
   } finally {
     await pool.end();
   }

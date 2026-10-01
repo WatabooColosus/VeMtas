@@ -12,6 +12,7 @@ for (const file of [
   "0007_ledger_integrity.sql",
   "0008_payment_intents.sql",
   "0009_financial_receipts.sql",
+  "0010_payment_receipt_link.sql",
 ]) {
   await pool.query(
     await readFile(

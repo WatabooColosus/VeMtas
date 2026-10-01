@@ -2563,6 +2563,22 @@ const server = createServer(async (req, res) => {
       );
       if (existing.rowCount) {
         await client.query("ROLLBACK");
+        if (
+          existing.rows[0].user_id !== actorId ||
+          String(existing.rows[0].amount_minor) !==
+            String(input.amount_minor) ||
+          existing.rows[0].currency !== (input.currency ?? "COP")
+        ) {
+          reply(res, 409, {
+            error: {
+              code: "IDEMPOTENCY_COLLISION",
+              message: "Idempotency key belongs to a different request",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
         reply(res, 200, { data: existing.rows[0], idempotent: true });
         return;
       }

@@ -117,6 +117,40 @@ try {
     console.log(
       "phase-04 HTTP integration: foreign capture replay denied PASS",
     );
+    const topupKey = `http-topup-${Date.now()}`;
+    const topupHeaders = {
+      "content-type": "application/json",
+      "x-actor-id": user.rows[0].id,
+      "idempotency-key": topupKey,
+    };
+    for (const [amount, expected] of [
+      [500, 201],
+      [500, 200],
+      [501, 409],
+    ]) {
+      const result = await fetch("http://127.0.0.1:39147/api/v1/me/topups", {
+        method: "POST",
+        headers: topupHeaders,
+        body: JSON.stringify({ amount_minor: amount }),
+      });
+      if (result.status !== expected)
+        throw new Error(
+          `topup expected ${expected}: ${result.status} ${await result.text()}`,
+        );
+    }
+    const foreignTopup = await fetch(
+      "http://127.0.0.1:39147/api/v1/me/topups",
+      {
+        method: "POST",
+        headers: { ...topupHeaders, "x-actor-id": actor },
+        body: JSON.stringify({ amount_minor: 500 }),
+      },
+    );
+    if (foreignTopup.status !== 409)
+      throw new Error("foreign topup replay was accepted");
+    console.log(
+      "phase-04 HTTP integration: topup payload/actor collisions PASS",
+    );
   } finally {
     await pool.end();
   }

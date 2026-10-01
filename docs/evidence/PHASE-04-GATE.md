@@ -45,6 +45,7 @@ Latest runtime evidence (2026-09-30):
 - `pnpm test:integration` — PASS against local PostgreSQL, including HTTP capture, idempotency collisions, rollback, webhook authentication, receipt authorization and two competing captures (one `201`, one `409`, final balance `100`).
 - Clean database proof — PASS: new `vemtas_clean` database, `pnpm migration-from-zero`, ten migrations applied and 35 public tables created.
 - Cash refund correction — PASS by inspection and regression suite: cash refunds no longer mint wallet credit.
+- Persisted session path — PASS for registration-issued bearer sessions on balance, payment intents, top-ups, captures, receipts and refunds; each route checks hash, expiry, revocation and active user before resolving the actor.
 
 The phase remains `IN_PROGRESS`; these results strengthen runtime evidence but do not prove real authentication, provider reconciliation processing, crash recovery or production readiness.
 

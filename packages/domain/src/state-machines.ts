@@ -18,6 +18,19 @@ export type BusinessStatus =
   | "ACTIVE"
   | "SUSPENDED"
   | "REJECTED";
+export type TopUpStatus =
+  | "CREATED"
+  | "PROVIDER_PENDING"
+  | "CONFIRMED"
+  | "POSTED"
+  | "FAILED"
+  | "EXPIRED";
+export type RefundStatus =
+  | "REQUESTED"
+  | "VALIDATED"
+  | "POSTED"
+  | "COMPLETED"
+  | "REJECTED";
 const transitions: Record<string, Record<string, string[]>> = {
   credential: {
     PENDING: ["ACTIVE"],
@@ -38,9 +51,19 @@ const transitions: Record<string, Record<string, string[]>> = {
     ACTIVE: ["SUSPENDED"],
     SUSPENDED: ["ACTIVE"],
   },
+  topup: {
+    CREATED: ["PROVIDER_PENDING", "FAILED", "EXPIRED"],
+    PROVIDER_PENDING: ["CONFIRMED", "FAILED", "EXPIRED"],
+    CONFIRMED: ["POSTED"],
+  },
+  refund: {
+    REQUESTED: ["VALIDATED", "REJECTED"],
+    VALIDATED: ["POSTED", "REJECTED"],
+    POSTED: ["COMPLETED"],
+  },
 };
 export function transition(
-  kind: "credential" | "terminal" | "business",
+  kind: "credential" | "terminal" | "business" | "topup" | "refund",
   from: string,
   to: string,
 ): string {

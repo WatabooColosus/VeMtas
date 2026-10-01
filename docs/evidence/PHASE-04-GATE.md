@@ -32,4 +32,6 @@ Financial receipts (`RC`) are created transactionally during balance capture, ex
 
 `POST /control/reconciliations` now records matched or mismatched periods with difference and audit event; it does not mutate ledger history.
 
+Manual local runtime evidence: API `/ready` returned HTTP 200; unauthenticated reconciliation returned HTTP 403; authenticated platform reconciliation returned HTTP 201 with `MATCHED` and zero difference. The experimental child-process HTTP harness is retained for repair but is not part of the green integration command because Windows process-tree cleanup is not yet deterministic.
+
 Code inspection also identifies unresolved security/correctness issues: caller-supplied actor headers are trusted; refund handlers do not verify merchant permission; replay checks do not compare actor and payload; cash refunds credit a wallet without an original wallet debit; ledger immutability and balance are not enforced by database constraints. These require correction and production-path tests before PASS.

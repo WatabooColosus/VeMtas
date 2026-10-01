@@ -57,7 +57,20 @@ if (count.rows[0].count !== 1 || imbalance.rowCount)
   throw new Error(
     `concurrency invariant failed: ${JSON.stringify({ results, count: count.rows[0].count, imbalance: imbalance.rowCount })}`,
   );
+const webhookKey = `webhook-${Date.now()}`;
+const webhookResults = await Promise.all([
+  pool.query(
+    "INSERT INTO payment_webhook_events (provider,event_id,event_type,payload_json) VALUES ('MOCK',$1,'payment.succeeded','{}') ON CONFLICT (provider,event_id) DO NOTHING RETURNING id",
+    [webhookKey],
+  ),
+  pool.query(
+    "INSERT INTO payment_webhook_events (provider,event_id,event_type,payload_json) VALUES ('MOCK',$1,'payment.succeeded','{}') ON CONFLICT (provider,event_id) DO NOTHING RETURNING id",
+    [webhookKey],
+  ),
+]);
+if (webhookResults.filter((result) => result.rowCount === 1).length !== 1)
+  throw new Error("webhook deduplication failed");
 console.log(
-  `phase-04 integration: concurrent idempotency and balanced ledger PASS (${results.join(",")})`,
+  `phase-04 integration: concurrent idempotency, webhook deduplication and balanced ledger PASS (${results.join(",")})`,
 );
 await pool.end();

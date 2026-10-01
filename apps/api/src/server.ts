@@ -2672,6 +2672,43 @@ const server = createServer(async (req, res) => {
     }
     return;
   }
+  const webhookLink = req.url?.match(
+    /^\/api\/v1\/webhooks\/payments\/([^/]+)$/,
+  );
+  if (req.method === "POST" && webhookLink) {
+    const input = await body(req);
+    if (
+      typeof input.event_id !== "string" ||
+      typeof input.event_type !== "string"
+    ) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "event_id and event_type are required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const event = await pool.query(
+      "INSERT INTO payment_webhook_events (provider,event_id,event_type,payload_json) VALUES ($1,$2,$3,$4) ON CONFLICT (provider,event_id) DO NOTHING RETURNING id,provider,event_id,event_type,status,received_at",
+      [webhookLink[1], input.event_id, input.event_type, JSON.stringify(input)],
+    );
+    if (!event.rowCount) {
+      reply(res, 200, {
+        data: {
+          provider: webhookLink[1],
+          event_id: input.event_id,
+          status: "DUPLICATE",
+        },
+        duplicate: true,
+      });
+      return;
+    }
+    reply(res, 202, { data: event.rows[0] });
+    return;
+  }
   reply(res, 404, {
     error: {
       code: "NOT_FOUND",

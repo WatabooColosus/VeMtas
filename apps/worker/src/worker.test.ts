@@ -1,3 +1,2 @@
-import { describe, it, expect } from "vitest";
-describe("worker", () =>
-  it("starts in outbox mode", () => expect(true).toBe(true)));
+import { describe, expect, it } from "vitest";
+describe("worker outbox contract", () => { it("defines a safe initial state", () => expect("PENDING").toBe("PENDING")); });

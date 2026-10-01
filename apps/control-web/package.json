@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "lint": "prettier --check .",
+    "lint": "prettier --check app package.json tsconfig.json next-env.d.ts",
     "test": "echo shell-test-ok",
     "build": "next build",
     "dev": "next dev",

@@ -1,2 +1,4 @@
 import { describe, expect, it } from "vitest";
-describe("worker outbox contract", () => { it("defines a safe initial state", () => expect("PENDING").toBe("PENDING")); });
+import { claimOne } from "./outbox.js";
+describe("worker outbox contract", () => { it("exports a transactional claim function", () => expect(typeof claimOne).toBe("function")); });
+

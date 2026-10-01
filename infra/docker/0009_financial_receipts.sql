@@ -1,0 +1,2 @@
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS payment_id uuid REFERENCES payments(id);
+CREATE TABLE IF NOT EXISTS reconciliations (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), provider text NOT NULL, period text NOT NULL, expected_minor bigint NOT NULL DEFAULT 0, observed_minor bigint NOT NULL DEFAULT 0, difference_minor bigint NOT NULL DEFAULT 0, status text NOT NULL DEFAULT 'OPEN', created_at timestamptz NOT NULL DEFAULT now(), UNIQUE(provider,period));

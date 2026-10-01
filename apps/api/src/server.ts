@@ -2929,6 +2929,20 @@ const server = createServer(async (req, res) => {
         ],
       );
       await client.query(
+        "INSERT INTO receipts (sale_id,payment_id,receipt_number,type,status,snapshot_json) VALUES ($1,$2,$3,'RC','ISSUED',$4)",
+        [
+          intent.rows[0].sale_id,
+          payment.rows[0].id,
+          `RC-${payment.rows[0].id}`,
+          JSON.stringify({
+            payment_id: payment.rows[0].id,
+            amount_minor: String(intent.rows[0].amount_minor),
+            currency: intent.rows[0].currency,
+            type: "VEMTAS_BALANCE",
+          }),
+        ],
+      );
+      await client.query(
         "UPDATE payment_intents SET status='CAPTURED' WHERE id=$1",
         [intent.rows[0].id],
       );
@@ -2949,6 +2963,26 @@ const server = createServer(async (req, res) => {
     } finally {
       client.release();
     }
+    return;
+  }
+  const receiptLink = req.url?.match(/^\/api\/v1\/receipts\/([^/]+)$/);
+  if (req.method === "GET" && receiptLink) {
+    const receipt = await pool.query(
+      "SELECT id,sale_id,payment_id,receipt_number,type,status,snapshot_json,issued_at FROM receipts WHERE id=$1",
+      [receiptLink[1]],
+    );
+    if (!receipt.rowCount) {
+      reply(res, 404, {
+        error: {
+          code: "RECEIPT_NOT_FOUND",
+          message: "Receipt not found",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    reply(res, 200, { data: receipt.rows[0] });
     return;
   }
   reply(res, 404, {

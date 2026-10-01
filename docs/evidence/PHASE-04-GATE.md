@@ -28,4 +28,6 @@ Missing deliverables include PaymentIntent, wallet Payment, balance projection, 
 
 The first money slice now includes `payment_intents`, `payments`, idempotent intent creation, serialized balance checks and `GET /me/balance` as a ledger-derived projection. Capture creates a balanced debit from the user's account and credit to merchant payable. Full HTTP authorization and end-to-end capture tests remain pending.
 
+Financial receipts (`RC`) are created transactionally during balance capture, exposed through `GET /receipts/:id`, and migration `0009` adds reconciliation records. Provider reconciliation execution remains pending.
+
 Code inspection also identifies unresolved security/correctness issues: caller-supplied actor headers are trusted; refund handlers do not verify merchant permission; replay checks do not compare actor and payload; cash refunds credit a wallet without an original wallet debit; ledger immutability and balance are not enforced by database constraints. These require correction and production-path tests before PASS.

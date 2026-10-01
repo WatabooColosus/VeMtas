@@ -32,5 +32,3 @@ Status: PASS
 ## Prohibido
 
 No implementar todavía wallet, pagos reales, promociones o hardware NFC real.
-
-

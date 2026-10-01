@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:integration": "tsx src/integration.ts"
+    "test:integration": "tsx src/integration.ts && tsx src/phase2.integration.ts"
   },
   "devDependencies": {
     "@types/node": "24.5.2",

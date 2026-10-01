@@ -6,6 +6,7 @@ Implemented and verified locally:
 
 - `0005_commerce.sql` adds catalog, variants, prices, sales, sale lines, receipts and captured cash payments.
 - `POST /api/v1/sales` validates active business, branch, authorized terminal, cashier scope and active prices, then commits sale, cash payment and receipt snapshot in one transaction.
+- Catalog endpoints now cover product, variant, branch price and inventory balance creation/update with owner/admin/manager scope checks.
 - Historical receipt snapshot remains unchanged when the current price changes.
 - Invalid actor/scope/terminal and missing active price are rejected before completion.
 - No VeMtas balance or ledger tables are touched by the cash sale flow.

@@ -1928,6 +1928,245 @@ const server = createServer(async (req, res) => {
     reply(res, 200, { data: events.rows });
     return;
   }
+  const catalogProduct = req.url?.match(
+    /^\/api\/v1\/businesses\/([^/]+)\/products$/,
+  );
+  if (req.method === "POST" && catalogProduct) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const input = await body(req);
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (
+      typeof input.name !== "string" ||
+      !input.name.trim() ||
+      !["PRODUCT", "SERVICE"].includes(input.type ?? "PRODUCT")
+    ) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "name and valid type are required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const membership = await pool.query(
+      "SELECT id FROM business_memberships WHERE business_id=$1 AND user_id=$2 AND status='ACTIVE' AND role IN ('BUSINESS_OWNER','BUSINESS_ADMIN') LIMIT 1",
+      [catalogProduct[1], actorId],
+    );
+    if (!membership.rowCount) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Catalog scope denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const product = await pool.query(
+      "INSERT INTO products (business_id,type,name,description,status) VALUES ($1,$2,$3,$4,'ACTIVE') RETURNING id,business_id,type,name,description,status",
+      [
+        catalogProduct[1],
+        input.type ?? "PRODUCT",
+        input.name.trim(),
+        typeof input.description === "string" ? input.description : null,
+      ],
+    );
+    reply(res, 201, { data: product.rows[0] });
+    return;
+  }
+  const catalogVariant = req.url?.match(
+    /^\/api\/v1\/products\/([^/]+)\/variants$/,
+  );
+  if (req.method === "POST" && catalogVariant) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const input = await body(req);
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (typeof input.sku !== "string" || !input.sku.trim()) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "sku is required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const owner = await pool.query(
+      "SELECT m.id FROM business_memberships m JOIN products p ON p.business_id=m.business_id WHERE p.id=$1 AND m.user_id=$2 AND m.status='ACTIVE' AND m.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN') LIMIT 1",
+      [catalogVariant[1], actorId],
+    );
+    if (!owner.rowCount) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Catalog scope denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    try {
+      const variant = await pool.query(
+        "INSERT INTO product_variants (product_id,sku,attributes_json,status) VALUES ($1,$2,$3,'ACTIVE') RETURNING id,product_id,sku,attributes_json,status",
+        [catalogVariant[1], input.sku.trim(), input.attributes ?? {}],
+      );
+      reply(res, 201, { data: variant.rows[0] });
+    } catch (error) {
+      if ((error as { code?: string }).code === "23505")
+        reply(res, 409, {
+          error: {
+            code: "SKU_ALREADY_EXISTS",
+            message: "SKU already exists",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+      else throw error;
+    }
+    return;
+  }
+  const catalogPrice = req.url?.match(/^\/api\/v1\/variants\/([^/]+)\/prices$/);
+  if (req.method === "POST" && catalogPrice) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const input = await body(req);
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (
+      typeof input.amount_minor !== "number" ||
+      !Number.isSafeInteger(input.amount_minor) ||
+      input.amount_minor <= 0 ||
+      typeof input.branch_id !== "string"
+    ) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "positive amount_minor and branch_id are required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const owner = await pool.query(
+      "SELECT m.id FROM business_memberships m JOIN product_variants v ON v.id=$1 JOIN products p ON p.id=v.product_id JOIN branches b ON b.id=$2 AND b.business_id=p.business_id WHERE m.business_id=p.business_id AND m.user_id=$3 AND m.status='ACTIVE' AND m.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN') LIMIT 1",
+      [catalogPrice[1], input.branch_id, actorId],
+    );
+    if (!owner.rowCount) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Catalog scope denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const price = await pool.query(
+      "INSERT INTO prices (variant_id,branch_id,amount_minor,currency,valid_from) VALUES ($1,$2,$3,$4,now()) RETURNING id,variant_id,branch_id,amount_minor,currency,valid_from",
+      [
+        catalogPrice[1],
+        input.branch_id,
+        input.amount_minor.toString(),
+        input.currency ?? "COP",
+      ],
+    );
+    reply(res, 201, {
+      data: {
+        ...price.rows[0],
+        amount_minor: String(price.rows[0].amount_minor),
+      },
+    });
+    return;
+  }
+  const inventoryAdjust = req.url?.match(
+    /^\/api\/v1\/branches\/([^/]+)\/inventory$/,
+  );
+  if (req.method === "POST" && inventoryAdjust) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const input = await body(req);
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (
+      typeof input.variant_id !== "string" ||
+      !Number.isInteger(input.quantity) ||
+      input.quantity < 0
+    ) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "variant_id and non-negative quantity are required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const owner = await pool.query(
+      "SELECT m.id FROM business_memberships m JOIN branches b ON b.id=$1 AND b.business_id=m.business_id WHERE m.user_id=$2 AND m.status='ACTIVE' AND m.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN','BRANCH_MANAGER') LIMIT 1",
+      [inventoryAdjust[1], actorId],
+    );
+    if (!owner.rowCount) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Inventory scope denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const balance = await pool.query(
+      "INSERT INTO inventory_balances (variant_id,branch_id,quantity) VALUES ($1,$2,$3) ON CONFLICT (variant_id,branch_id) DO UPDATE SET quantity=EXCLUDED.quantity,updated_at=now() RETURNING variant_id,branch_id,quantity,updated_at",
+      [input.variant_id, inventoryAdjust[1], input.quantity],
+    );
+    reply(res, 200, { data: balance.rows[0] });
+    return;
+  }
   if (req.method === "POST" && req.url === "/api/v1/sales") {
     const actorId = req.headers["x-actor-id"] as string | undefined;
     if (!actorId) {

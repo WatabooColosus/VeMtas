@@ -26,4 +26,6 @@ The concurrency harness tests duplicate top-up inserts, not competing spends aga
 
 Missing deliverables include PaymentIntent, wallet Payment, balance projection, financial receipts and reconciliation. F06/F07/F08 and the full MONEY suite are not demonstrated.
 
+The first money slice now includes `payment_intents`, `payments`, idempotent intent creation and `GET /me/balance` as a ledger-derived projection. Payment capture and debit authorization are still pending.
+
 Code inspection also identifies unresolved security/correctness issues: caller-supplied actor headers are trusted; refund handlers do not verify merchant permission; replay checks do not compare actor and payload; cash refunds credit a wallet without an original wallet debit; ledger immutability and balance are not enforced by database constraints. These require correction and production-path tests before PASS.

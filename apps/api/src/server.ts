@@ -2709,6 +2709,105 @@ const server = createServer(async (req, res) => {
     reply(res, 202, { data: event.rows[0] });
     return;
   }
+  if (req.method === "GET" && req.url === "/api/v1/me/balance") {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const balance = await pool.query(
+      "SELECT COALESCE(sum(CASE WHEN le.direction='CREDIT' THEN le.amount_minor ELSE -le.amount_minor END),0)::bigint AS available_minor, le.currency FROM ledger_entries le JOIN financial_accounts fa ON fa.id=le.financial_account_id JOIN ledger_transactions lt ON lt.id=le.ledger_transaction_id WHERE fa.owner_type='USER' AND fa.owner_id=$1 AND fa.account_type='USER_AVAILABLE' AND lt.status='POSTED' GROUP BY le.currency",
+      [actorId],
+    );
+    reply(res, 200, {
+      data: balance.rows.length
+        ? {
+            currency: balance.rows[0].currency,
+            available_minor: String(balance.rows[0].available_minor),
+          }
+        : { currency: "COP", available_minor: "0" },
+    });
+    return;
+  }
+  if (req.method === "POST" && req.url === "/api/v1/payment-intents") {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
+    const input = await body(req);
+    if (!actorId || !idempotencyKey) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor and idempotency-key required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (
+      typeof input.business_id !== "string" ||
+      !Number.isSafeInteger(input.amount_minor) ||
+      input.amount_minor <= 0
+    ) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "business_id and positive amount_minor are required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const existing = await pool.query(
+      "SELECT id,user_id,business_id,amount_minor,currency,status,created_at FROM payment_intents WHERE idempotency_key=$1",
+      [idempotencyKey],
+    );
+    if (existing.rowCount) {
+      reply(res, 200, { data: existing.rows[0], idempotent: true });
+      return;
+    }
+    const business = await pool.query(
+      "SELECT id FROM businesses WHERE id=$1 AND status='ACTIVE'",
+      [input.business_id],
+    );
+    if (!business.rowCount) {
+      reply(res, 409, {
+        error: {
+          code: "BUSINESS_NOT_ACTIVE",
+          message: "Business is not active",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const intent = await pool.query(
+      "INSERT INTO payment_intents (user_id,business_id,sale_id,amount_minor,currency,status,idempotency_key,expires_at) VALUES ($1,$2,$3,$4,$5,'CREATED',$6,now()+interval '15 minutes') RETURNING id,user_id,business_id,sale_id,amount_minor,currency,status,idempotency_key,created_at,expires_at",
+      [
+        actorId,
+        input.business_id,
+        typeof input.sale_id === "string" ? input.sale_id : null,
+        input.amount_minor.toString(),
+        input.currency ?? "COP",
+        idempotencyKey,
+      ],
+    );
+    reply(res, 201, {
+      data: {
+        ...intent.rows[0],
+        amount_minor: String(intent.rows[0].amount_minor),
+      },
+    });
+    return;
+  }
   reply(res, 404, {
     error: {
       code: "NOT_FOUND",

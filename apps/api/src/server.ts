@@ -2808,6 +2808,149 @@ const server = createServer(async (req, res) => {
     });
     return;
   }
+  const captureLink = req.url?.match(
+    /^\/api\/v1\/payment-intents\/([^/]+)\/capture$/,
+  );
+  if (req.method === "POST" && captureLink) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
+    if (!actorId || !idempotencyKey) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor and idempotency-key required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+      const existing = await client.query(
+        "SELECT id,payment_intent_id,amount_minor,currency,status,ledger_transaction_id,created_at FROM payments WHERE payment_intent_id=$1",
+        [captureLink[1]],
+      );
+      if (existing.rowCount) {
+        await client.query("COMMIT");
+        reply(res, 200, { data: existing.rows[0], idempotent: true });
+        return;
+      }
+      const intent = await client.query(
+        "SELECT id,user_id,business_id,amount_minor,currency,status FROM payment_intents WHERE id=$1 FOR UPDATE",
+        [captureLink[1]],
+      );
+      if (!intent.rowCount || intent.rows[0].user_id !== actorId) {
+        await client.query("ROLLBACK");
+        reply(res, 403, {
+          error: {
+            code: "PAYMENT_SCOPE_DENIED",
+            message: "Payment intent scope denied",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      if (intent.rows[0].status !== "CREATED") {
+        await client.query("ROLLBACK");
+        reply(res, 409, {
+          error: {
+            code: "INVALID_PAYMENT_INTENT",
+            message: "Payment intent is not capturable",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const userAccount = await client.query(
+        "SELECT id FROM financial_accounts WHERE owner_type='USER' AND owner_id=$1 AND account_type='USER_AVAILABLE' AND currency=$2 FOR UPDATE",
+        [actorId, intent.rows[0].currency],
+      );
+      if (!userAccount.rowCount) {
+        await client.query("ROLLBACK");
+        reply(res, 409, {
+          error: {
+            code: "INSUFFICIENT_BALANCE",
+            message: "No available balance",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const balance = await client.query(
+        "SELECT COALESCE(sum(CASE WHEN le.direction='CREDIT' THEN le.amount_minor ELSE -le.amount_minor END),0)::bigint AS available_minor FROM ledger_entries le JOIN ledger_transactions lt ON lt.id=le.ledger_transaction_id WHERE le.financial_account_id=$1 AND lt.status='POSTED'",
+        [userAccount.rows[0].id],
+      );
+      if (
+        BigInt(balance.rows[0].available_minor) <
+        BigInt(intent.rows[0].amount_minor)
+      ) {
+        await client.query("ROLLBACK");
+        reply(res, 409, {
+          error: {
+            code: "INSUFFICIENT_BALANCE",
+            message: "Available balance is insufficient",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const merchant = await client.query(
+        "INSERT INTO financial_accounts (owner_type,owner_id,account_type,currency) VALUES ('BUSINESS',$1,'MERCHANT_PAYABLE',$2) ON CONFLICT (owner_type,owner_id,account_type,currency) DO UPDATE SET status='ACTIVE' RETURNING id",
+        [intent.rows[0].business_id, intent.rows[0].currency],
+      );
+      const txn = await client.query(
+        "INSERT INTO ledger_transactions (transaction_type,reference_type,reference_id,idempotency_key) VALUES ('PAYMENT','PAYMENT_INTENT',$1,$2) RETURNING id",
+        [intent.rows[0].id, idempotencyKey],
+      );
+      await client.query(
+        "INSERT INTO ledger_entries (ledger_transaction_id,financial_account_id,direction,amount_minor,currency) VALUES ($1,$2,'DEBIT',$3,$4),($1,$5,'CREDIT',$3,$4)",
+        [
+          txn.rows[0].id,
+          userAccount.rows[0].id,
+          intent.rows[0].amount_minor,
+          intent.rows[0].currency,
+          merchant.rows[0].id,
+        ],
+      );
+      const payment = await client.query(
+        "INSERT INTO payments (payment_intent_id,amount_minor,currency,method,status,ledger_transaction_id) VALUES ($1,$2,$3,'VEMTAS_BALANCE','POSTED',$4) RETURNING id,payment_intent_id,amount_minor,currency,method,status,ledger_transaction_id,created_at",
+        [
+          intent.rows[0].id,
+          intent.rows[0].amount_minor,
+          intent.rows[0].currency,
+          txn.rows[0].id,
+        ],
+      );
+      await client.query(
+        "UPDATE payment_intents SET status='CAPTURED' WHERE id=$1",
+        [intent.rows[0].id],
+      );
+      await client.query("COMMIT");
+      reply(res, 201, { data: payment.rows[0] });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if ((error as { code?: string }).code === "40001")
+        reply(res, 409, {
+          error: {
+            code: "CONCURRENT_RETRY",
+            message: "Concurrent payment attempt must retry",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+      else throw error;
+    } finally {
+      client.release();
+    }
+    return;
+  }
   reply(res, 404, {
     error: {
       code: "NOT_FOUND",

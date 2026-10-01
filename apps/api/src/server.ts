@@ -3107,9 +3107,21 @@ const server = createServer(async (req, res) => {
   }
   const receiptLink = req.url?.match(/^\/api\/v1\/receipts\/([^/]+)$/);
   if (req.method === "GET" && receiptLink) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
     const receipt = await pool.query(
-      "SELECT id,sale_id,payment_id,receipt_number,type,status,snapshot_json,issued_at FROM receipts WHERE id=$1",
-      [receiptLink[1]],
+      "SELECT r.id,r.sale_id,r.payment_id,r.receipt_number,r.type,r.status,r.snapshot_json,r.issued_at FROM receipts r LEFT JOIN sales s ON s.id=r.sale_id LEFT JOIN payments p ON p.id=r.payment_id LEFT JOIN payment_intents pi ON pi.id=p.payment_intent_id WHERE r.id=$1 AND (s.customer_user_id=$2 OR pi.user_id=$2 OR EXISTS (SELECT 1 FROM business_memberships bm WHERE bm.business_id=s.business_id AND bm.user_id=$2 AND bm.status='ACTIVE' AND bm.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN')))",
+      [receiptLink[1], actorId],
     );
     if (!receipt.rowCount) {
       reply(res, 404, {

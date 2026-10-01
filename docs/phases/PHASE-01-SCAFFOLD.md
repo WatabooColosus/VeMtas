@@ -1,6 +1,6 @@
 # PHASE-01 — Scaffold
 
-Status: NOT_STARTED
+Status: GATE_REVIEW
 
 ## Entregables
 
@@ -32,3 +32,4 @@ Status: NOT_STARTED
 ## Prohibido
 
 No implementar todavía wallet, pagos reales, promociones o hardware NFC real.
+

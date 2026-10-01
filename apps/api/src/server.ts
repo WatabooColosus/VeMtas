@@ -124,6 +124,145 @@ const server = createServer(async (req, res) => {
       [credentialId, actorId],
     );
     if (!result.rowCount) {
+      if (req.method === "POST" && req.url === "/api/v1/businesses") {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        try {
+          const input = await body(req);
+          if (typeof input.name !== "string" || !input.name.trim()) {
+            reply(res, 400, {
+              error: {
+                code: "INVALID_INPUT",
+                message: "name is required",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          const client = await pool.connect();
+          try {
+            await client.query("BEGIN");
+            const b = await client.query(
+              "INSERT INTO businesses (name,status,verification_state) VALUES ($1,'DRAFT','PENDING') RETURNING *",
+              [input.name.trim()],
+            );
+            await client.query(
+              "INSERT INTO business_memberships (business_id,user_id,role) VALUES ($1,$2,'BUSINESS_OWNER')",
+              [b.rows[0].id, actorId],
+            );
+            await client.query(
+              "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'BusinessCreated','BUSINESS',$2,$3)",
+              [actorId, b.rows[0].id, cid],
+            );
+            await client.query("COMMIT");
+            reply(res, 201, { data: b.rows[0] });
+          } catch (e) {
+            await client.query("ROLLBACK");
+            throw e;
+          } finally {
+            client.release();
+          }
+        } catch {
+          reply(res, 400, {
+            error: {
+              code: "INVALID_REQUEST",
+              message: "Business could not be created",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+        }
+        return;
+      }
+      const branchMatch = req.url?.match(
+        /^\/api\/v1\/businesses\/([^/]+)\/branches$/,
+      );
+      if (req.method === "POST" && branchMatch) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const input = await body(req);
+        const allowed = await pool.query(
+          "SELECT 1 FROM business_memberships WHERE business_id=$1 AND user_id=$2 AND role IN ('BUSINESS_OWNER','BUSINESS_ADMIN') AND status='ACTIVE'",
+          [branchMatch[1], actorId],
+        );
+        if (!allowed.rowCount) {
+          reply(res, 403, {
+            error: {
+              code: "FORBIDDEN",
+              message: "Business scope denied",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const b = await pool.query(
+          "INSERT INTO branches (business_id,name) VALUES ($1,$2) RETURNING *",
+          [branchMatch[1], input.name],
+        );
+        reply(res, 201, { data: b.rows[0] });
+        return;
+      }
+      const terminalMatch = req.url?.match(
+        /^\/api\/v1\/branches\/([^/]+)\/terminals$/,
+      );
+      if (req.method === "POST" && terminalMatch) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const allowed = await pool.query(
+          "SELECT 1 FROM business_memberships m JOIN branches b ON b.business_id=m.business_id WHERE b.id=$1 AND m.user_id=$2 AND m.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN','BRANCH_MANAGER') AND m.status='ACTIVE'",
+          [terminalMatch[1], actorId],
+        );
+        if (!allowed.rowCount) {
+          reply(res, 403, {
+            error: {
+              code: "FORBIDDEN",
+              message: "Branch scope denied",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const input = await body(req);
+        const t = await pool.query(
+          "INSERT INTO terminals (branch_id,terminal_type,status) VALUES ($1,$2,'PENDING') RETURNING *",
+          [terminalMatch[1], input.terminal_type ?? "WEB"],
+        );
+        reply(res, 201, { data: t.rows[0] });
+        return;
+      }
       reply(res, 404, {
         error: {
           code: "CREDENTIAL_NOT_FOUND_OR_INVALID",
@@ -139,6 +278,145 @@ const server = createServer(async (req, res) => {
       [actorId, credentialId, cid],
     );
     reply(res, 200, { data: result.rows[0] });
+    return;
+  }
+  if (req.method === "POST" && req.url === "/api/v1/businesses") {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    try {
+      const input = await body(req);
+      if (typeof input.name !== "string" || !input.name.trim()) {
+        reply(res, 400, {
+          error: {
+            code: "INVALID_INPUT",
+            message: "name is required",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const b = await client.query(
+          "INSERT INTO businesses (name,status,verification_state) VALUES ($1,'DRAFT','PENDING') RETURNING *",
+          [input.name.trim()],
+        );
+        await client.query(
+          "INSERT INTO business_memberships (business_id,user_id,role) VALUES ($1,$2,'BUSINESS_OWNER')",
+          [b.rows[0].id, actorId],
+        );
+        await client.query(
+          "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'BusinessCreated','BUSINESS',$2,$3)",
+          [actorId, b.rows[0].id, cid],
+        );
+        await client.query("COMMIT");
+        reply(res, 201, { data: b.rows[0] });
+      } catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+      } finally {
+        client.release();
+      }
+    } catch {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_REQUEST",
+          message: "Business could not be created",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+    }
+    return;
+  }
+  const branchMatch = req.url?.match(
+    /^\/api\/v1\/businesses\/([^/]+)\/branches$/,
+  );
+  if (req.method === "POST" && branchMatch) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const input = await body(req);
+    const allowed = await pool.query(
+      "SELECT 1 FROM business_memberships WHERE business_id=$1 AND user_id=$2 AND role IN ('BUSINESS_OWNER','BUSINESS_ADMIN') AND status='ACTIVE'",
+      [branchMatch[1], actorId],
+    );
+    if (!allowed.rowCount) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Business scope denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const b = await pool.query(
+      "INSERT INTO branches (business_id,name) VALUES ($1,$2) RETURNING *",
+      [branchMatch[1], input.name],
+    );
+    reply(res, 201, { data: b.rows[0] });
+    return;
+  }
+  const terminalMatch = req.url?.match(
+    /^\/api\/v1\/branches\/([^/]+)\/terminals$/,
+  );
+  if (req.method === "POST" && terminalMatch) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const allowed = await pool.query(
+      "SELECT 1 FROM business_memberships m JOIN branches b ON b.business_id=m.business_id WHERE b.id=$1 AND m.user_id=$2 AND m.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN','BRANCH_MANAGER') AND m.status='ACTIVE'",
+      [terminalMatch[1], actorId],
+    );
+    if (!allowed.rowCount) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Branch scope denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const input = await body(req);
+    const t = await pool.query(
+      "INSERT INTO terminals (branch_id,terminal_type,status) VALUES ($1,$2,'PENDING') RETURNING *",
+      [terminalMatch[1], input.terminal_type ?? "WEB"],
+    );
+    reply(res, 201, { data: t.rows[0] });
     return;
   }
   reply(res, 404, {

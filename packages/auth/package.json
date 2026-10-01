@@ -9,6 +9,7 @@
     "test": "echo package-tests-not-started"
   },
   "devDependencies": {
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
   }
 }

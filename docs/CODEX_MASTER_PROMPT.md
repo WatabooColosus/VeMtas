@@ -114,3 +114,19 @@ Entrega:
 - siguiente paso permitido.
 
 Tu objetivo final no es escribir mucho código. Es lograr que VeMtas avance gate por gate sin romper su dinero, identidad, seguridad, trazabilidad ni visión de producto.
+
+
+## Punto de arranque autorizado
+
+PHASE-00 está PASS. La primera implementación autorizada es **PHASE-01 — Scaffold**.
+
+En tu primera sesión de construcción:
+
+1. confirma que PHASE-00 está PASS;
+2. crea el scaffold definido por ADR-005, ADR-006, ADR-012, ADR-016 y ADR-017;
+3. no adelantes dominio de PHASE-02;
+4. levanta PostgreSQL local reproducible;
+5. crea CI y harness de tests;
+6. demuestra migración desde DB vacía;
+7. abre PR con evidencia;
+8. detente al completar el gate de PHASE-01.

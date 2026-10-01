@@ -70,6 +70,19 @@ try {
   );
   if (unauthorized.status !== 403)
     throw new Error(`expected 403, got ${unauthorized.status}`);
+  const webhookUnauthorized = await fetch(
+    "http://127.0.0.1:39147/api/v1/webhooks/payments/MOCK",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        event_id: `http-${Date.now()}`,
+        event_type: "payment.test",
+      }),
+    },
+  );
+  if (webhookUnauthorized.status !== 401)
+    throw new Error(`expected webhook 401, got ${webhookUnauthorized.status}`);
   const actor = "00000000-0000-0000-0000-000000000001";
   const period = `http-${Date.now()}`;
   const response = await fetch(

@@ -2553,7 +2553,9 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === "POST" && req.url === "/api/v1/me/topups") {
-    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const actorId =
+      (await resolveSessionActor(req)) ??
+      (req.headers["x-actor-id"] as string | undefined);
     const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
     const input = await body(req);
     if (!actorId || !idempotencyKey) {
@@ -3154,7 +3156,9 @@ const server = createServer(async (req, res) => {
   }
   const receiptLink = req.url?.match(/^\/api\/v1\/receipts\/([^/]+)$/);
   if (req.method === "GET" && receiptLink) {
-    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const actorId =
+      (await resolveSessionActor(req)) ??
+      (req.headers["x-actor-id"] as string | undefined);
     if (!actorId) {
       reply(res, 401, {
         error: {

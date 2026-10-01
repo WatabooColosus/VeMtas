@@ -428,30 +428,6 @@ const server = createServer(async (req, res) => {
                   reply(res, 200, { data: c.rows[0] });
                   return;
                 }
-                if (
-                  req.method === "GET" &&
-                  req.url === "/api/v1/control/audit"
-                ) {
-                  const platformActor = req.headers["x-platform-actor-id"] as
-                    | string
-                    | undefined;
-                  if (!platformActor) {
-                    reply(res, 403, {
-                      error: {
-                        code: "FORBIDDEN",
-                        message: "Platform scope required",
-                        correlation_id: cid,
-                        details: {},
-                      },
-                    });
-                    return;
-                  }
-                  const events = await pool.query(
-                    "SELECT id,actor_type,actor_id,action,resource_type,resource_id,correlation_id,created_at FROM audit_events ORDER BY created_at DESC LIMIT 100",
-                  );
-                  reply(res, 200, { data: events.rows });
-                  return;
-                }
                 reply(res, 404, {
                   error: {
                     code: "BUSINESS_NOT_FOUND",
@@ -625,27 +601,6 @@ const server = createServer(async (req, res) => {
                 [actorId, credentialActivate[1], cid],
               );
               reply(res, 200, { data: c.rows[0] });
-              return;
-            }
-            if (req.method === "GET" && req.url === "/api/v1/control/audit") {
-              const platformActor = req.headers["x-platform-actor-id"] as
-                | string
-                | undefined;
-              if (!platformActor) {
-                reply(res, 403, {
-                  error: {
-                    code: "FORBIDDEN",
-                    message: "Platform scope required",
-                    correlation_id: cid,
-                    details: {},
-                  },
-                });
-                return;
-              }
-              const events = await pool.query(
-                "SELECT id,actor_type,actor_id,action,resource_type,resource_id,correlation_id,created_at FROM audit_events ORDER BY created_at DESC LIMIT 100",
-              );
-              reply(res, 200, { data: events.rows });
               return;
             }
             reply(res, 404, {
@@ -887,27 +842,6 @@ const server = createServer(async (req, res) => {
             reply(res, 200, { data: c.rows[0] });
             return;
           }
-          if (req.method === "GET" && req.url === "/api/v1/control/audit") {
-            const platformActor = req.headers["x-platform-actor-id"] as
-              | string
-              | undefined;
-            if (!platformActor) {
-              reply(res, 403, {
-                error: {
-                  code: "FORBIDDEN",
-                  message: "Platform scope required",
-                  correlation_id: cid,
-                  details: {},
-                },
-              });
-              return;
-            }
-            const events = await pool.query(
-              "SELECT id,actor_type,actor_id,action,resource_type,resource_id,correlation_id,created_at FROM audit_events ORDER BY created_at DESC LIMIT 100",
-            );
-            reply(res, 200, { data: events.rows });
-            return;
-          }
           reply(res, 404, {
             error: {
               code: "BUSINESS_NOT_FOUND",
@@ -1079,27 +1013,6 @@ const server = createServer(async (req, res) => {
           [actorId, credentialActivate[1], cid],
         );
         reply(res, 200, { data: c.rows[0] });
-        return;
-      }
-      if (req.method === "GET" && req.url === "/api/v1/control/audit") {
-        const platformActor = req.headers["x-platform-actor-id"] as
-          | string
-          | undefined;
-        if (!platformActor) {
-          reply(res, 403, {
-            error: {
-              code: "FORBIDDEN",
-              message: "Platform scope required",
-              correlation_id: cid,
-              details: {},
-            },
-          });
-          return;
-        }
-        const events = await pool.query(
-          "SELECT id,actor_type,actor_id,action,resource_type,resource_id,correlation_id,created_at FROM audit_events ORDER BY created_at DESC LIMIT 100",
-        );
-        reply(res, 200, { data: events.rows });
         return;
       }
       reply(res, 404, {
@@ -1419,27 +1332,6 @@ const server = createServer(async (req, res) => {
               reply(res, 200, { data: c.rows[0] });
               return;
             }
-            if (req.method === "GET" && req.url === "/api/v1/control/audit") {
-              const platformActor = req.headers["x-platform-actor-id"] as
-                | string
-                | undefined;
-              if (!platformActor) {
-                reply(res, 403, {
-                  error: {
-                    code: "FORBIDDEN",
-                    message: "Platform scope required",
-                    correlation_id: cid,
-                    details: {},
-                  },
-                });
-                return;
-              }
-              const events = await pool.query(
-                "SELECT id,actor_type,actor_id,action,resource_type,resource_id,correlation_id,created_at FROM audit_events ORDER BY created_at DESC LIMIT 100",
-              );
-              reply(res, 200, { data: events.rows });
-              return;
-            }
             reply(res, 404, {
               error: {
                 code: "BUSINESS_NOT_FOUND",
@@ -1611,27 +1503,6 @@ const server = createServer(async (req, res) => {
             [actorId, credentialActivate[1], cid],
           );
           reply(res, 200, { data: c.rows[0] });
-          return;
-        }
-        if (req.method === "GET" && req.url === "/api/v1/control/audit") {
-          const platformActor = req.headers["x-platform-actor-id"] as
-            | string
-            | undefined;
-          if (!platformActor) {
-            reply(res, 403, {
-              error: {
-                code: "FORBIDDEN",
-                message: "Platform scope required",
-                correlation_id: cid,
-                details: {},
-              },
-            });
-            return;
-          }
-          const events = await pool.query(
-            "SELECT id,actor_type,actor_id,action,resource_type,resource_id,correlation_id,created_at FROM audit_events ORDER BY created_at DESC LIMIT 100",
-          );
-          reply(res, 200, { data: events.rows });
           return;
         }
         reply(res, 404, {
@@ -1870,27 +1741,6 @@ const server = createServer(async (req, res) => {
           [actorId, credentialActivate[1], cid],
         );
         reply(res, 200, { data: c.rows[0] });
-        return;
-      }
-      if (req.method === "GET" && req.url === "/api/v1/control/audit") {
-        const platformActor = req.headers["x-platform-actor-id"] as
-          | string
-          | undefined;
-        if (!platformActor) {
-          reply(res, 403, {
-            error: {
-              code: "FORBIDDEN",
-              message: "Platform scope required",
-              correlation_id: cid,
-              details: {},
-            },
-          });
-          return;
-        }
-        const events = await pool.query(
-          "SELECT id,actor_type,actor_id,action,resource_type,resource_id,correlation_id,created_at FROM audit_events ORDER BY created_at DESC LIMIT 100",
-        );
-        reply(res, 200, { data: events.rows });
         return;
       }
       reply(res, 404, {

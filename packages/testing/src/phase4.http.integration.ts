@@ -1,13 +1,16 @@
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const child = spawn(
   process.execPath,
   [
-    resolve(root, "node_modules/tsx/dist/cli.mjs"),
+    "--import",
+    pathToFileURL(
+      resolve(root, "packages/testing/node_modules/tsx/dist/loader.mjs"),
+    ).href,
     resolve(root, "apps/api/src/server.ts"),
   ],
   {
@@ -17,22 +20,31 @@ const child = spawn(
       DATABASE_URL:
         process.env.TEST_DATABASE_URL ??
         "postgresql://vemtas:vemtas@localhost:5433/vemtas_test",
-      API_PORT: "3001",
+      API_PORT: "39147",
     },
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
   },
 );
+let output = "";
+child.stdout?.on("data", (chunk) => {
+  output += chunk.toString();
+});
+child.stderr?.on("data", (chunk) => {
+  output += chunk.toString();
+});
 try {
   let ready = false;
   for (let attempt = 0; attempt < 30 && !ready; attempt++) {
     await delay(200);
+    if (child.exitCode !== null) throw new Error(`API exited: ${output}`);
     try {
-      ready = (await fetch("http://127.0.0.1:3001/ready")).status === 200;
+      ready = (await fetch("http://127.0.0.1:39147/ready")).status === 200;
     } catch {}
   }
-  if (!ready) throw new Error("api did not become ready");
+  if (!ready || !output.includes("api_started"))
+    throw new Error(`api did not become ready: ${output}`);
   const unauthorized = await fetch(
-    "http://127.0.0.1:3001/api/v1/control/reconciliations",
+    "http://127.0.0.1:39147/api/v1/control/reconciliations",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -49,7 +61,7 @@ try {
   const actor = "00000000-0000-0000-0000-000000000001";
   const period = `http-${Date.now()}`;
   const response = await fetch(
-    "http://127.0.0.1:3001/api/v1/control/reconciliations",
+    "http://127.0.0.1:39147/api/v1/control/reconciliations",
     {
       method: "POST",
       headers: {

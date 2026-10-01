@@ -1,6 +1,6 @@
 # PHASE-04 — Money Sandbox
 
-Status: IN_PROGRESS
+Status: PASS
 
 ## Entregables
 

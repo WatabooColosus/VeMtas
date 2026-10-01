@@ -70,7 +70,36 @@ const webhookResults = await Promise.all([
 ]);
 if (webhookResults.filter((result) => result.rowCount === 1).length !== 1)
   throw new Error("webhook deduplication failed");
+const crashKey = `crash-${Date.now()}`;
+const crashClient = await pool.connect();
+try {
+  await crashClient.query("BEGIN");
+  const failedTopup = await crashClient.query(
+    "INSERT INTO topups (user_id,provider,amount_minor,currency,status,idempotency_key) VALUES ($1,'MOCK',700,'COP','POSTED',$2) RETURNING id",
+    [user.rows[0].id, crashKey],
+  );
+  await crashClient.query(
+    "INSERT INTO ledger_transactions (transaction_type,reference_type,reference_id,idempotency_key) VALUES ('TOPUP','TOPUP',$1,$2)",
+    [failedTopup.rows[0].id, crashKey],
+  );
+  throw new Error("INJECTED_FAILURE");
+} catch (error) {
+  if (!(error instanceof Error) || error.message !== "INJECTED_FAILURE")
+    throw error;
+  await crashClient.query("ROLLBACK");
+} finally {
+  crashClient.release();
+}
+const rollbackCheck = await pool.query(
+  "SELECT (SELECT count(*) FROM topups WHERE idempotency_key=$1)::int AS topups, (SELECT count(*) FROM ledger_transactions WHERE idempotency_key=$1)::int AS transactions",
+  [crashKey],
+);
+if (
+  rollbackCheck.rows[0].topups !== 0 ||
+  rollbackCheck.rows[0].transactions !== 0
+)
+  throw new Error("failure injection left committed state");
 console.log(
-  `phase-04 integration: concurrent idempotency, webhook deduplication and balanced ledger PASS (${results.join(",")})`,
+  `phase-04 integration: concurrent idempotency, webhook deduplication, rollback and balanced ledger PASS (${results.join(",")})`,
 );
 await pool.end();

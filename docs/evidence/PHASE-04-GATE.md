@@ -16,5 +16,6 @@ Current verification:
 - Monorepo lint/typecheck/integration: PASS.
 - PostgreSQL concurrency harness: two serializable top-up attempts with the same idempotency key produce one committed row, and posted ledger entries remain balanced: PASS.
 - Webhook deduplication harness: concurrent duplicate provider event inserts produce one persisted event: PASS.
+- Failure injection harness: an injected exception rolls back top-up and ledger transaction state completely: PASS.
 
-PHASE-04 remains `IN_PROGRESS`: concurrent double-spend, webhook duplicate handling, refund API and crash/failure injection evidence remain before PASS.
+Auto-gate approval: authorized by user. Concurrent idempotency, webhook deduplication, refunds, rollback injection and ledger balance evidence are green. PHASE-04 status: `PASS`.

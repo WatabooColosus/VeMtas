@@ -117,6 +117,35 @@ try {
     console.log(
       "phase-04 HTTP integration: foreign capture replay denied PASS",
     );
+    const intentKey = `http-intent-${Date.now()}`;
+    for (const [amount, expected] of [
+      [100, 201],
+      [100, 200],
+      [101, 409],
+    ]) {
+      const result = await fetch(
+        "http://127.0.0.1:39147/api/v1/payment-intents",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-actor-id": user.rows[0].id,
+            "idempotency-key": intentKey,
+          },
+          body: JSON.stringify({
+            business_id: business.rows[0].id,
+            amount_minor: amount,
+          }),
+        },
+      );
+      if (result.status !== expected)
+        throw new Error(
+          `intent expected ${expected}: ${result.status} ${await result.text()}`,
+        );
+    }
+    console.log(
+      "phase-04 HTTP integration: payment intent payload collisions PASS",
+    );
     const topupKey = `http-topup-${Date.now()}`;
     const topupHeaders = {
       "content-type": "application/json",

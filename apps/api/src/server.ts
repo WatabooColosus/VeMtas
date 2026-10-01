@@ -2880,10 +2880,29 @@ const server = createServer(async (req, res) => {
       return;
     }
     const existing = await pool.query(
-      "SELECT id,user_id,business_id,amount_minor,currency,status,created_at FROM payment_intents WHERE idempotency_key=$1",
+      "SELECT id,user_id,business_id,sale_id,amount_minor,currency,status,created_at FROM payment_intents WHERE idempotency_key=$1",
       [idempotencyKey],
     );
     if (existing.rowCount) {
+      const previous = existing.rows[0];
+      if (
+        previous.user_id !== actorId ||
+        previous.business_id !== input.business_id ||
+        previous.sale_id !==
+          (typeof input.sale_id === "string" ? input.sale_id : null) ||
+        String(previous.amount_minor) !== String(input.amount_minor) ||
+        previous.currency !== (input.currency ?? "COP")
+      ) {
+        reply(res, 409, {
+          error: {
+            code: "IDEMPOTENCY_COLLISION",
+            message: "Idempotency key belongs to a different payment request",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
       reply(res, 200, { data: existing.rows[0], idempotent: true });
       return;
     }

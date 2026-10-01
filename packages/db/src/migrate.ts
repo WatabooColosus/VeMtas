@@ -8,6 +8,7 @@ for (const file of [
   "0003_identity_organizations.sql",
   "0004_auth_operational.sql",
   "0005_commerce.sql",
+  "0006_money_sandbox.sql",
 ]) {
   await pool.query(
     await readFile(

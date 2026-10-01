@@ -2454,6 +2454,95 @@ const server = createServer(async (req, res) => {
     reply(res, 200, { data: reviews.rows });
     return;
   }
+  if (req.method === "POST" && req.url === "/api/v1/me/topups") {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
+    const input = await body(req);
+    if (!actorId || !idempotencyKey) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor and idempotency-key required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (!Number.isSafeInteger(input.amount_minor) || input.amount_minor <= 0) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "positive amount_minor is required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const existing = await client.query(
+        "SELECT id,user_id,amount_minor,currency,status FROM topups WHERE idempotency_key=$1",
+        [idempotencyKey],
+      );
+      if (existing.rowCount) {
+        await client.query("ROLLBACK");
+        reply(res, 200, { data: existing.rows[0], idempotent: true });
+        return;
+      }
+      const account = await client.query(
+        "INSERT INTO financial_accounts (owner_type,owner_id,account_type,currency) VALUES ('USER',$1,'USER_AVAILABLE',$2) ON CONFLICT (owner_type,owner_id,account_type,currency) DO UPDATE SET status='ACTIVE' RETURNING id",
+        [actorId, input.currency ?? "COP"],
+      );
+      const control = await client.query(
+        "INSERT INTO financial_accounts (owner_type,owner_id,account_type,currency) VALUES ('SYSTEM',$1,'VEMTAS_REVENUE',$2) ON CONFLICT (owner_type,owner_id,account_type,currency) DO UPDATE SET status='ACTIVE' RETURNING id",
+        [actorId, input.currency ?? "COP"],
+      );
+      const topup = await client.query(
+        "INSERT INTO topups (user_id,provider,amount_minor,currency,status,external_reference,idempotency_key) VALUES ($1,'MOCK',$2,$3,'POSTED',$4,$5) RETURNING id,user_id,amount_minor,currency,status,created_at",
+        [
+          actorId,
+          input.amount_minor.toString(),
+          input.currency ?? "COP",
+          `mock-${idempotencyKey}`,
+          idempotencyKey,
+        ],
+      );
+      const txn = await client.query(
+        "INSERT INTO ledger_transactions (transaction_type,reference_type,reference_id,idempotency_key) VALUES ('TOPUP','TOPUP',$1,$2) RETURNING id",
+        [topup.rows[0].id, idempotencyKey],
+      );
+      await client.query(
+        "INSERT INTO ledger_entries (ledger_transaction_id,financial_account_id,direction,amount_minor,currency) VALUES ($1,$2,'DEBIT',$3,$4),($1,$5,'CREDIT',$3,$4)",
+        [
+          txn.rows[0].id,
+          control.rows[0].id,
+          input.amount_minor.toString(),
+          input.currency ?? "COP",
+          account.rows[0].id,
+        ],
+      );
+      await client.query("COMMIT");
+      reply(res, 201, { data: topup.rows[0] });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if ((error as { code?: string }).code === "23505")
+        reply(res, 409, {
+          error: {
+            code: "IDEMPOTENCY_COLLISION",
+            message: "Idempotency key collision",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+      else throw error;
+    } finally {
+      client.release();
+    }
+    return;
+  }
   reply(res, 404, {
     error: {
       code: "NOT_FOUND",

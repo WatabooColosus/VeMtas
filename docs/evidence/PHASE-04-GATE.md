@@ -47,6 +47,7 @@ Latest runtime evidence (2026-09-30):
 - Cash refund correction — PASS by inspection and regression suite: cash refunds no longer mint wallet credit.
 - Persisted session path — PASS for registration-issued bearer sessions on balance, payment intents, top-ups, captures, receipts and refunds; each route checks hash, expiry, revocation and active user before resolving the actor.
 - Session lifecycle HTTP proof — PASS: registration issues a bearer token, revocation persists `revoked_at`, and a subsequent balance request returns `401`.
+- Session identity HTTP proof — PASS: `GET /api/v1/auth/me` resolves the persisted user identity from the bearer token before revocation.
 
 The phase remains `IN_PROGRESS`; these results strengthen runtime evidence but do not prove real authentication, provider reconciliation processing, crash recovery or production readiness.
 

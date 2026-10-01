@@ -1,0 +1,23 @@
+{
+  "name": "@vemtas/business-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "prettier --check app package.json tsconfig.json next-env.d.ts",
+    "test": "echo shell-test-ok",
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9",
+    "typescript": "5.9.2"
+  },
+  "dependencies": {
+    "next": "15.5.4",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  }
+}

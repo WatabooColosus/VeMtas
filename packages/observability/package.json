@@ -1,0 +1,17 @@
+{
+  "name": "@vemtas/observability",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "prettier --check src",
+    "typecheck": "tsc --noEmit",
+    "test": "echo package-tests-ok"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2",
+    "prettier": "3.6.2"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@vemtas/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "lint": "prettier --check src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@vemtas/config": "workspace:*",
+    "@vemtas/contracts": "workspace:*",
+    "@vemtas/observability": "workspace:*",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.5.2",
+    "@types/pg": "8.15.5",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

@@ -1,0 +1,5 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+CREATE TABLE IF NOT EXISTS auth_identities (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES users(id), provider text NOT NULL, provider_subject text NOT NULL, verified_at timestamptz, UNIQUE(provider,provider_subject));
+CREATE TABLE IF NOT EXISTS devices (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES users(id), device_type text NOT NULL, trust_state text NOT NULL DEFAULT 'UNTRUSTED', last_seen_at timestamptz);
+CREATE TABLE IF NOT EXISTS sessions (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES users(id), token_hash text NOT NULL UNIQUE, device_id uuid REFERENCES devices(id), expires_at timestamptz NOT NULL, revoked_at timestamptz);
+CREATE TABLE IF NOT EXISTS registers (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), branch_id uuid NOT NULL REFERENCES branches(id), name text NOT NULL, status text NOT NULL DEFAULT 'ACTIVE');

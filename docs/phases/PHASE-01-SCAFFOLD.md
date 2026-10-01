@@ -1,6 +1,6 @@
 # PHASE-01 — Scaffold
 
-Status: NOT_STARTED
+Status: PASS
 
 ## Entregables
 

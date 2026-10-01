@@ -27,3 +27,5 @@ Thumbs.db
 # local secrets
 secrets/
 credentials/
+.turbo/
+*.tsbuildinfo

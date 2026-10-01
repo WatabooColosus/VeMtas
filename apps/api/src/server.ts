@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { createHash, randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { env } from "@vemtas/config";
 import { correlationId, log } from "@vemtas/observability";
@@ -15,6 +16,21 @@ const reply = (
 ) => {
   res.statusCode = status;
   res.end(JSON.stringify(value));
+};
+const sessionTokenHash = (token: string) =>
+  createHash("sha256").update(token).digest("hex");
+const resolveSessionActor = async (
+  req: import("node:http").IncomingMessage,
+) => {
+  const token = req.headers["authorization"]
+    ?.toString()
+    .replace(/^Bearer\s+/i, "");
+  if (!token) return undefined;
+  const result = await pool.query(
+    "SELECT user_id FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=$1 AND sessions.revoked_at IS NULL AND sessions.expires_at>now() AND users.status='ACTIVE'",
+    [sessionTokenHash(token)],
+  );
+  return result.rows[0]?.user_id as string | undefined;
 };
 const server = createServer(async (req, res) => {
   const cid = correlationId(
@@ -72,8 +88,16 @@ const server = createServer(async (req, res) => {
           "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id,metadata_json) VALUES ('USER',$1,'UserRegistered','USER',$1,$2,$3)",
           [user.rows[0].id, cid, JSON.stringify({ source: "api" })],
         );
+        const sessionToken = randomBytes(32).toString("base64url");
+        await client.query(
+          "INSERT INTO sessions (user_id,token_hash,expires_at) VALUES ($1,$2,now()+interval '30 days')",
+          [user.rows[0].id, sessionTokenHash(sessionToken)],
+        );
         await client.query("COMMIT");
-        reply(res, 201, { data: user.rows[0] });
+        reply(res, 201, {
+          data: user.rows[0],
+          session: { token: sessionToken, expires_in_seconds: 2592000 },
+        });
       } catch (error) {
         await client.query("ROLLBACK");
         if ((error as { code?: string }).code === "23505")

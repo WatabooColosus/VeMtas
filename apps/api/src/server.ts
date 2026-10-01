@@ -2769,6 +2769,20 @@ const server = createServer(async (req, res) => {
     /^\/api\/v1\/webhooks\/payments\/([^/]+)$/,
   );
   if (req.method === "POST" && webhookLink) {
+    const platformActorId = req.headers["x-platform-actor-id"] as
+      | string
+      | undefined;
+    if (!platformActorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Platform actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
     const input = await body(req);
     if (
       typeof input.event_id !== "string" ||
@@ -2786,7 +2800,12 @@ const server = createServer(async (req, res) => {
     }
     const event = await pool.query(
       "INSERT INTO payment_webhook_events (provider,event_id,event_type,payload_json) VALUES ($1,$2,$3,$4) ON CONFLICT (provider,event_id) DO NOTHING RETURNING id,provider,event_id,event_type,status,received_at",
-      [webhookLink[1], input.event_id, input.event_type, JSON.stringify(input)],
+      [
+        webhookLink[1],
+        input.event_id,
+        input.event_type,
+        JSON.stringify({ ...input, received_by: platformActorId }),
+      ],
     );
     if (!event.rowCount) {
       reply(res, 200, {

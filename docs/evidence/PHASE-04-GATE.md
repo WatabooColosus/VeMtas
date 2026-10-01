@@ -14,5 +14,6 @@ Current verification:
 - Money sandbox migration from empty PostgreSQL: PASS.
 - Domain ledger unit tests: PASS.
 - Monorepo lint/typecheck/integration: PASS.
+- PostgreSQL concurrency harness: two serializable top-up attempts with the same idempotency key produce one committed row, and posted ledger entries remain balanced: PASS.
 
 PHASE-04 remains `IN_PROGRESS`: concurrent double-spend, webhook duplicate handling, refund API and crash/failure injection evidence remain before PASS.

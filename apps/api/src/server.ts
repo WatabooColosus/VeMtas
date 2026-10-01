@@ -2973,7 +2973,9 @@ const server = createServer(async (req, res) => {
     /^\/api\/v1\/payment-intents\/([^/]+)\/capture$/,
   );
   if (req.method === "POST" && captureLink) {
-    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const actorId =
+      (await resolveSessionActor(req)) ??
+      (req.headers["x-actor-id"] as string | undefined);
     const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
     if (!actorId || !idempotencyKey) {
       reply(res, 401, {

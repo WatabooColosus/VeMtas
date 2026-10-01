@@ -7,6 +7,7 @@ Implemented and verified locally:
 - `0005_commerce.sql` adds catalog, variants, prices, sales, sale lines, receipts and captured cash payments.
 - `POST /api/v1/sales` validates active business, branch, authorized terminal, cashier scope and active prices, then commits sale, cash payment and receipt snapshot in one transaction.
 - Catalog endpoints now cover product, variant, branch price and inventory balance creation/update with owner/admin/manager scope checks.
+- Review eligibility is created for a customer-backed completed sale, can be consumed exactly once, and publishes a verified review.
 - Historical receipt snapshot remains unchanged when the current price changes.
 - Invalid actor/scope/terminal and missing active price are rejected before completion.
 - No VeMtas balance or ledger tables are touched by the cash sale flow.
@@ -18,4 +19,4 @@ Implemented and verified locally:
 - `pnpm build` — PASS (16 packages; four Next.js shells built).
 - API runtime: `/health` HTTP 200 and `/ready` HTTP 200 with database check `ok`.
 
-PHASE-03 remains `IN_PROGRESS`: catalog management endpoints, basic inventory operations and review eligibility still require implementation before the phase gate can be marked PASS.
+PHASE-03 is `GATE_REVIEW`; the implementation scope is complete and requires human review of the evidence before marking PASS.

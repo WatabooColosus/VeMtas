@@ -2314,6 +2314,12 @@ const server = createServer(async (req, res) => {
         `INSERT INTO receipts (sale_id,receipt_number,snapshot_json) VALUES ($1,$2,$3) RETURNING id,receipt_number,status,snapshot_json,issued_at`,
         [sale.rows[0].id, `VT-${sale.rows[0].id}`, JSON.stringify(snapshot)],
       );
+      if (typeof input.customer_user_id === "string") {
+        await client.query(
+          "INSERT INTO review_eligibilities (user_id,business_id,sale_id,status) VALUES ($1,$2,$3,'AVAILABLE') ON CONFLICT (sale_id) DO NOTHING",
+          [input.customer_user_id, input.business_id, sale.rows[0].id],
+        );
+      }
       await client.query(
         "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id,metadata_json) VALUES ('USER',$1,'CashSaleRecorded','SALE',$2,$3,$4)",
         [
@@ -2358,6 +2364,94 @@ const server = createServer(async (req, res) => {
     } finally {
       client.release();
     }
+    return;
+  }
+  const reviewLink = req.url?.match(
+    /^\/api\/v1\/review-eligibilities\/([^/]+)\/review$/,
+  );
+  if (req.method === "POST" && reviewLink) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    const input = await body(req);
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (
+      !Number.isInteger(input.rating) ||
+      input.rating < 1 ||
+      input.rating > 5
+    ) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "rating must be between 1 and 5",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const eligibility = await client.query(
+        "SELECT id,user_id,status FROM review_eligibilities WHERE id=$1 FOR UPDATE",
+        [reviewLink[1]],
+      );
+      if (
+        !eligibility.rowCount ||
+        eligibility.rows[0].user_id !== actorId ||
+        eligibility.rows[0].status !== "AVAILABLE"
+      ) {
+        await client.query("ROLLBACK");
+        reply(res, 403, {
+          error: {
+            code: "REVIEW_NOT_ELIGIBLE",
+            message: "Review eligibility is unavailable",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const review = await client.query(
+        "INSERT INTO reviews (eligibility_id,rating,comment,status) VALUES ($1,$2,$3,'PUBLISHED') RETURNING id,eligibility_id,rating,comment,status,created_at",
+        [
+          reviewLink[1],
+          input.rating,
+          typeof input.comment === "string" ? input.comment : null,
+        ],
+      );
+      await client.query(
+        "UPDATE review_eligibilities SET status='CONSUMED' WHERE id=$1",
+        [reviewLink[1]],
+      );
+      await client.query("COMMIT");
+      reply(res, 201, { data: review.rows[0] });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    return;
+  }
+  const businessReviews = req.url?.match(
+    /^\/api\/v1\/businesses\/([^/]+)\/reviews$/,
+  );
+  if (req.method === "GET" && businessReviews) {
+    const reviews = await pool.query(
+      "SELECT r.id,r.rating,r.comment,r.status,r.created_at FROM reviews r JOIN review_eligibilities e ON e.id=r.eligibility_id WHERE e.business_id=$1 AND r.status='PUBLISHED' ORDER BY r.created_at DESC LIMIT 100",
+      [businessReviews[1]],
+    );
+    reply(res, 200, { data: reviews.rows });
     return;
   }
   reply(res, 404, {

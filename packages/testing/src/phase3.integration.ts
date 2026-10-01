@@ -94,6 +94,24 @@ try {
     payment.rows[0].status !== "CAPTURED"
   )
     throw new Error("cash payment missing");
+  const eligibility = await client.query(
+    "INSERT INTO review_eligibilities (user_id,business_id,sale_id,status) VALUES ($1,$2,$3,'AVAILABLE') RETURNING id",
+    [user.rows[0].id, business.rows[0].id, sale.rows[0].id],
+  );
+  await client.query(
+    "INSERT INTO reviews (eligibility_id,rating,comment,status) VALUES ($1,5,'Verified purchase','PUBLISHED')",
+    [eligibility.rows[0].id],
+  );
+  await client.query(
+    "UPDATE review_eligibilities SET status='CONSUMED' WHERE id=$1 AND status='AVAILABLE'",
+    [eligibility.rows[0].id],
+  );
+  const consumed = await client.query(
+    "SELECT status FROM review_eligibilities WHERE id=$1",
+    [eligibility.rows[0].id],
+  );
+  if (consumed.rows[0].status !== "CONSUMED")
+    throw new Error("review eligibility was not consumed");
   await client.query("ROLLBACK");
   console.log(
     "phase-03 integration: cash sale receipt snapshot and historical price invariance PASS",

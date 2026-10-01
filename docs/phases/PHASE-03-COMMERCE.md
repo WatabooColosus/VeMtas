@@ -1,6 +1,6 @@
 # PHASE-03 — Catalog + Cash Sales
 
-Status: IN_PROGRESS
+Status: GATE_REVIEW
 
 ## Entregables
 

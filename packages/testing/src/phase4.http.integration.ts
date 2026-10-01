@@ -27,6 +27,17 @@ const child = spawn(
   },
 );
 let output = "";
+const postJson = async (
+  path: string,
+  input: { headers: Record<string, string>; body: unknown },
+) => {
+  const response = await fetch(`http://127.0.0.1:39147${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...input.headers },
+    body: JSON.stringify(input.body),
+  });
+  return { status: response.status, body: await response.json() };
+};
 child.stdout?.on("data", (chunk) => {
   output += chunk.toString();
 });
@@ -207,6 +218,56 @@ try {
     console.log(
       "phase-04 HTTP integration: capture and projected balance PASS",
     );
+
+    const competing = await Promise.all(
+      [0, 1].map((index) =>
+        postJson("/api/v1/payment-intents", {
+          headers: {
+            "x-actor-id": user.rows[0].id,
+            "idempotency-key": `competing-intent-${intentKey}-${index}`,
+          },
+          body: {
+            business_id: business.rows[0].id,
+            amount_minor: 300,
+            currency: "COP",
+          },
+        }),
+      ),
+    );
+    if (competing.some((response) => response.status !== 201))
+      throw new Error(
+        `competing intent creation failed: ${JSON.stringify(competing)}`,
+      );
+    const competingCaptures = await Promise.all(
+      competing.map((response, index) =>
+        postJson(`/api/v1/payment-intents/${response.body.data.id}/capture`, {
+          headers: {
+            "x-actor-id": user.rows[0].id,
+            "idempotency-key": `competing-capture-${intentKey}-${index}`,
+          },
+          body: {},
+        }),
+      ),
+    );
+    const captureStatuses = competingCaptures
+      .map((response) => response.status)
+      .sort();
+    if (captureStatuses.join(",") !== "201,409")
+      throw new Error(
+        `concurrent capture result wrong: ${JSON.stringify(competingCaptures)}`,
+      );
+    const afterCompeting = await fetch(
+      "http://127.0.0.1:39147/api/v1/me/balance",
+      {
+        headers: { "x-actor-id": user.rows[0].id },
+      },
+    );
+    const competingBalance = await afterCompeting.json();
+    if (competingBalance.data.available_minor !== "100")
+      throw new Error(
+        `concurrent capture balance wrong: ${JSON.stringify(competingBalance)}`,
+      );
+    console.log("phase-04 HTTP integration: concurrent distinct captures PASS");
   } finally {
     await pool.end();
   }

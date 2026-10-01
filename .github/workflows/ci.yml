@@ -21,14 +21,15 @@ jobs:
         with: { version: 11.19.0 }
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm migration-from-zero
+      - run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm migration-from-zero
         env:
           DATABASE_URL: postgresql://vemtas:vemtas@localhost:5433/vemtas_test
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm test:integration
+      - run: corepack pnpm lint
+      - run: corepack pnpm typecheck
+      - run: corepack pnpm test
+      - run: corepack pnpm test:integration
         env:
           TEST_DATABASE_URL: postgresql://vemtas:vemtas@localhost:5433/vemtas_test
-      - run: pnpm build
+      - run: corepack pnpm build

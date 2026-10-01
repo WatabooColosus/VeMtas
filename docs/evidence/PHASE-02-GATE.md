@@ -13,7 +13,7 @@ Verified against local PostgreSQL and API runtime:
 - credential block without actor — HTTP 401
 - SQL integration: user/profile, business scope, audit, credential block, terminal suspension — PASS
 
-PHASE-02 remains IN_PROGRESS until the full F01–F04 integration suite and human gate review are complete.
+PHASE-02 human gate review is approved; the recorded F01–F04 integration evidence is green.
 
 HTTP F03/F04 runtime matrix: register=201, business=201, submit=PENDING_VERIFICATION, branch=201, terminal=201, authorize=AUTHORIZED, suspend=SUSPENDED, resume=ACTIVE, cross-scope=403.
 

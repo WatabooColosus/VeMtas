@@ -21,12 +21,6 @@ jobs:
         with: { node-version: 24 }
       - uses: pnpm/action-setup@v4
         with: { version: 11.19.0 }
-      - name: Inspect package manager
-        run: |
-          node --version
-          pnpm --version
-          pnpm config get store-dir
-          pnpm config get registry
       - run: pnpm install --frozen-lockfile --fetch-retries=5 --fetch-retry-factor=2 --fetch-timeout=120000
       - run: pnpm migration-from-zero
         env:

@@ -263,6 +263,134 @@ const server = createServer(async (req, res) => {
         reply(res, 201, { data: t.rows[0] });
         return;
       }
+      const replaceMatch = req.url?.match(
+        /^\/api\/v1\/me\/credentials\/([^/]+)\/replace$/,
+      );
+      if (req.method === "POST" && replaceMatch) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const old = await client.query(
+            "SELECT user_id,type FROM credentials WHERE id=$1 AND user_id=$2 AND status IN ('ACTIVE','BLOCKED') FOR UPDATE",
+            [replaceMatch[1], actorId],
+          );
+          if (!old.rowCount) {
+            await client.query("ROLLBACK");
+            reply(res, 404, {
+              error: {
+                code: "CREDENTIAL_NOT_FOUND",
+                message: "Credential unavailable",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          const ref = `cred_${crypto.randomUUID()}`;
+          const fresh = await client.query(
+            "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'ACTIVE') RETURNING id,public_reference,status",
+            [actorId, old.rows[0].type, ref],
+          );
+          await client.query(
+            "UPDATE credentials SET status='REPLACED',replaced_by_id=$1 WHERE id=$2",
+            [fresh.rows[0].id, replaceMatch[1]],
+          );
+          await client.query(
+            "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialReplaced','CREDENTIAL',$2,$3)",
+            [actorId, replaceMatch[1], cid],
+          );
+          await client.query("COMMIT");
+          reply(res, 201, { data: fresh.rows[0] });
+        } catch (e) {
+          await client.query("ROLLBACK");
+          throw e;
+        } finally {
+          client.release();
+        }
+        return;
+      }
+      const terminalAction = req.url?.match(
+        /^\/api\/v1\/terminals\/([^/]+)\/(authorize|suspend|resume)$/,
+      );
+      if (req.method === "POST" && terminalAction) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const allowed = await pool.query(
+          "SELECT t.status,m.business_id,m.role FROM terminals t JOIN branches b ON b.id=t.branch_id JOIN business_memberships m ON m.business_id=b.business_id WHERE t.id=$1 AND m.user_id=$2 AND m.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN','BRANCH_MANAGER') AND m.status='ACTIVE'",
+          [terminalAction[1], actorId],
+        );
+        if (!allowed.rowCount) {
+          reply(res, 403, {
+            error: {
+              code: "FORBIDDEN",
+              message: "Terminal scope denied",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const current = allowed.rows[0].status;
+        const next =
+          terminalAction[2] === "authorize"
+            ? "AUTHORIZED"
+            : terminalAction[2] === "suspend"
+              ? "SUSPENDED"
+              : "ACTIVE";
+        const valid =
+          (next === "AUTHORIZED" && current === "PENDING") ||
+          (next === "SUSPENDED" &&
+            (current === "ACTIVE" || current === "AUTHORIZED")) ||
+          (next === "ACTIVE" && current === "SUSPENDED");
+        if (!valid) {
+          reply(res, 409, {
+            error: {
+              code: "INVALID_TERMINAL_TRANSITION",
+              message: "Invalid terminal transition",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const t = await pool.query(
+          "UPDATE terminals SET status=$1 WHERE id=$2 RETURNING id,status",
+          [next, terminalAction[1]],
+        );
+        await pool.query(
+          "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,$2,'TERMINAL',$3,$4)",
+          [
+            actorId,
+            `Terminal${terminalAction[2][0].toUpperCase() + terminalAction[2].slice(1)}`,
+            terminalAction[1],
+            cid,
+          ],
+        );
+        reply(res, 200, { data: t.rows[0] });
+        return;
+      }
       reply(res, 404, {
         error: {
           code: "CREDENTIAL_NOT_FOUND_OR_INVALID",
@@ -417,6 +545,134 @@ const server = createServer(async (req, res) => {
       [terminalMatch[1], input.terminal_type ?? "WEB"],
     );
     reply(res, 201, { data: t.rows[0] });
+    return;
+  }
+  const replaceMatch = req.url?.match(
+    /^\/api\/v1\/me\/credentials\/([^/]+)\/replace$/,
+  );
+  if (req.method === "POST" && replaceMatch) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const old = await client.query(
+        "SELECT user_id,type FROM credentials WHERE id=$1 AND user_id=$2 AND status IN ('ACTIVE','BLOCKED') FOR UPDATE",
+        [replaceMatch[1], actorId],
+      );
+      if (!old.rowCount) {
+        await client.query("ROLLBACK");
+        reply(res, 404, {
+          error: {
+            code: "CREDENTIAL_NOT_FOUND",
+            message: "Credential unavailable",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      const ref = `cred_${crypto.randomUUID()}`;
+      const fresh = await client.query(
+        "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'ACTIVE') RETURNING id,public_reference,status",
+        [actorId, old.rows[0].type, ref],
+      );
+      await client.query(
+        "UPDATE credentials SET status='REPLACED',replaced_by_id=$1 WHERE id=$2",
+        [fresh.rows[0].id, replaceMatch[1]],
+      );
+      await client.query(
+        "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialReplaced','CREDENTIAL',$2,$3)",
+        [actorId, replaceMatch[1], cid],
+      );
+      await client.query("COMMIT");
+      reply(res, 201, { data: fresh.rows[0] });
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+    return;
+  }
+  const terminalAction = req.url?.match(
+    /^\/api\/v1\/terminals\/([^/]+)\/(authorize|suspend|resume)$/,
+  );
+  if (req.method === "POST" && terminalAction) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const allowed = await pool.query(
+      "SELECT t.status,m.business_id,m.role FROM terminals t JOIN branches b ON b.id=t.branch_id JOIN business_memberships m ON m.business_id=b.business_id WHERE t.id=$1 AND m.user_id=$2 AND m.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN','BRANCH_MANAGER') AND m.status='ACTIVE'",
+      [terminalAction[1], actorId],
+    );
+    if (!allowed.rowCount) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Terminal scope denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const current = allowed.rows[0].status;
+    const next =
+      terminalAction[2] === "authorize"
+        ? "AUTHORIZED"
+        : terminalAction[2] === "suspend"
+          ? "SUSPENDED"
+          : "ACTIVE";
+    const valid =
+      (next === "AUTHORIZED" && current === "PENDING") ||
+      (next === "SUSPENDED" &&
+        (current === "ACTIVE" || current === "AUTHORIZED")) ||
+      (next === "ACTIVE" && current === "SUSPENDED");
+    if (!valid) {
+      reply(res, 409, {
+        error: {
+          code: "INVALID_TERMINAL_TRANSITION",
+          message: "Invalid terminal transition",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const t = await pool.query(
+      "UPDATE terminals SET status=$1 WHERE id=$2 RETURNING id,status",
+      [next, terminalAction[1]],
+    );
+    await pool.query(
+      "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,$2,'TERMINAL',$3,$4)",
+      [
+        actorId,
+        `Terminal${terminalAction[2][0].toUpperCase() + terminalAction[2].slice(1)}`,
+        terminalAction[1],
+        cid,
+      ],
+    );
+    reply(res, 200, { data: t.rows[0] });
     return;
   }
   reply(res, 404, {

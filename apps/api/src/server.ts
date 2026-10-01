@@ -311,6 +311,123 @@ const server = createServer(async (req, res) => {
                 [id],
               );
               if (!b.rowCount) {
+                const credentialLink = req.url?.match(
+                  /^\/api\/v1\/users\/([^/]+)\/credentials$/,
+                );
+                if (req.method === "POST" && credentialLink) {
+                  const actorId = req.headers["x-actor-id"] as
+                    | string
+                    | undefined;
+                  if (!actorId) {
+                    reply(res, 401, {
+                      error: {
+                        code: "UNAUTHENTICATED",
+                        message: "Actor required",
+                        correlation_id: cid,
+                        details: {},
+                      },
+                    });
+                    return;
+                  }
+                  if (
+                    actorId !== credentialLink[1] &&
+                    !req.headers["x-platform-actor-id"]
+                  ) {
+                    reply(res, 403, {
+                      error: {
+                        code: "FORBIDDEN",
+                        message: "Credential scope denied",
+                        correlation_id: cid,
+                        details: {},
+                      },
+                    });
+                    return;
+                  }
+                  const input = await body(req);
+                  if (
+                    typeof input.public_reference !== "string" ||
+                    !input.public_reference.trim()
+                  ) {
+                    reply(res, 400, {
+                      error: {
+                        code: "INVALID_INPUT",
+                        message: "public_reference is required",
+                        correlation_id: cid,
+                        details: {},
+                      },
+                    });
+                    return;
+                  }
+                  try {
+                    const c = await pool.query(
+                      "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'PENDING') RETURNING id,user_id,type,public_reference,status",
+                      [
+                        credentialLink[1],
+                        input.type ?? "NFC",
+                        input.public_reference.trim(),
+                      ],
+                    );
+                    await pool.query(
+                      "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialLinked','CREDENTIAL',$2,$3)",
+                      [actorId, c.rows[0].id, cid],
+                    );
+                    reply(res, 201, { data: c.rows[0] });
+                  } catch (e) {
+                    if ((e as { code?: string }).code === "23505") {
+                      reply(res, 409, {
+                        error: {
+                          code: "CREDENTIAL_ALREADY_LINKED",
+                          message: "Credential reference already linked",
+                          correlation_id: cid,
+                          details: {},
+                        },
+                      });
+                    } else {
+                      throw e;
+                    }
+                  }
+                  return;
+                }
+                const credentialActivate = req.url?.match(
+                  /^\/api\/v1\/credentials\/([^/]+)\/activate$/,
+                );
+                if (req.method === "POST" && credentialActivate) {
+                  const actorId = req.headers["x-actor-id"] as
+                    | string
+                    | undefined;
+                  if (!actorId) {
+                    reply(res, 401, {
+                      error: {
+                        code: "UNAUTHENTICATED",
+                        message: "Actor required",
+                        correlation_id: cid,
+                        details: {},
+                      },
+                    });
+                    return;
+                  }
+                  const c = await pool.query(
+                    "UPDATE credentials SET status='ACTIVE' WHERE id=$1 AND status='PENDING' RETURNING id,status",
+                    [credentialActivate[1]],
+                  );
+                  if (!c.rowCount) {
+                    reply(res, 409, {
+                      error: {
+                        code: "INVALID_CREDENTIAL_TRANSITION",
+                        message: "Credential is not pending",
+                        correlation_id: cid,
+                        details: {},
+                      },
+                    });
+                    return;
+                  }
+                  await pool.query(
+                    "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialActivated','CREDENTIAL',$2,$3)",
+                    [actorId, credentialActivate[1], cid],
+                  );
+                  reply(res, 200, { data: c.rows[0] });
+                  return;
+                }
                 reply(res, 404, {
                   error: {
                     code: "BUSINESS_NOT_FOUND",
@@ -371,6 +488,119 @@ const server = createServer(async (req, res) => {
                 ],
               );
               reply(res, 200, { data: { id, status: target } });
+              return;
+            }
+            const credentialLink = req.url?.match(
+              /^\/api\/v1\/users\/([^/]+)\/credentials$/,
+            );
+            if (req.method === "POST" && credentialLink) {
+              const actorId = req.headers["x-actor-id"] as string | undefined;
+              if (!actorId) {
+                reply(res, 401, {
+                  error: {
+                    code: "UNAUTHENTICATED",
+                    message: "Actor required",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              if (
+                actorId !== credentialLink[1] &&
+                !req.headers["x-platform-actor-id"]
+              ) {
+                reply(res, 403, {
+                  error: {
+                    code: "FORBIDDEN",
+                    message: "Credential scope denied",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              const input = await body(req);
+              if (
+                typeof input.public_reference !== "string" ||
+                !input.public_reference.trim()
+              ) {
+                reply(res, 400, {
+                  error: {
+                    code: "INVALID_INPUT",
+                    message: "public_reference is required",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              try {
+                const c = await pool.query(
+                  "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'PENDING') RETURNING id,user_id,type,public_reference,status",
+                  [
+                    credentialLink[1],
+                    input.type ?? "NFC",
+                    input.public_reference.trim(),
+                  ],
+                );
+                await pool.query(
+                  "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialLinked','CREDENTIAL',$2,$3)",
+                  [actorId, c.rows[0].id, cid],
+                );
+                reply(res, 201, { data: c.rows[0] });
+              } catch (e) {
+                if ((e as { code?: string }).code === "23505") {
+                  reply(res, 409, {
+                    error: {
+                      code: "CREDENTIAL_ALREADY_LINKED",
+                      message: "Credential reference already linked",
+                      correlation_id: cid,
+                      details: {},
+                    },
+                  });
+                } else {
+                  throw e;
+                }
+              }
+              return;
+            }
+            const credentialActivate = req.url?.match(
+              /^\/api\/v1\/credentials\/([^/]+)\/activate$/,
+            );
+            if (req.method === "POST" && credentialActivate) {
+              const actorId = req.headers["x-actor-id"] as string | undefined;
+              if (!actorId) {
+                reply(res, 401, {
+                  error: {
+                    code: "UNAUTHENTICATED",
+                    message: "Actor required",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              const c = await pool.query(
+                "UPDATE credentials SET status='ACTIVE' WHERE id=$1 AND status='PENDING' RETURNING id,status",
+                [credentialActivate[1]],
+              );
+              if (!c.rowCount) {
+                reply(res, 409, {
+                  error: {
+                    code: "INVALID_CREDENTIAL_TRANSITION",
+                    message: "Credential is not pending",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              await pool.query(
+                "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialActivated','CREDENTIAL',$2,$3)",
+                [actorId, credentialActivate[1], cid],
+              );
+              reply(res, 200, { data: c.rows[0] });
               return;
             }
             reply(res, 404, {
@@ -499,6 +729,119 @@ const server = createServer(async (req, res) => {
           [id],
         );
         if (!b.rowCount) {
+          const credentialLink = req.url?.match(
+            /^\/api\/v1\/users\/([^/]+)\/credentials$/,
+          );
+          if (req.method === "POST" && credentialLink) {
+            const actorId = req.headers["x-actor-id"] as string | undefined;
+            if (!actorId) {
+              reply(res, 401, {
+                error: {
+                  code: "UNAUTHENTICATED",
+                  message: "Actor required",
+                  correlation_id: cid,
+                  details: {},
+                },
+              });
+              return;
+            }
+            if (
+              actorId !== credentialLink[1] &&
+              !req.headers["x-platform-actor-id"]
+            ) {
+              reply(res, 403, {
+                error: {
+                  code: "FORBIDDEN",
+                  message: "Credential scope denied",
+                  correlation_id: cid,
+                  details: {},
+                },
+              });
+              return;
+            }
+            const input = await body(req);
+            if (
+              typeof input.public_reference !== "string" ||
+              !input.public_reference.trim()
+            ) {
+              reply(res, 400, {
+                error: {
+                  code: "INVALID_INPUT",
+                  message: "public_reference is required",
+                  correlation_id: cid,
+                  details: {},
+                },
+              });
+              return;
+            }
+            try {
+              const c = await pool.query(
+                "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'PENDING') RETURNING id,user_id,type,public_reference,status",
+                [
+                  credentialLink[1],
+                  input.type ?? "NFC",
+                  input.public_reference.trim(),
+                ],
+              );
+              await pool.query(
+                "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialLinked','CREDENTIAL',$2,$3)",
+                [actorId, c.rows[0].id, cid],
+              );
+              reply(res, 201, { data: c.rows[0] });
+            } catch (e) {
+              if ((e as { code?: string }).code === "23505") {
+                reply(res, 409, {
+                  error: {
+                    code: "CREDENTIAL_ALREADY_LINKED",
+                    message: "Credential reference already linked",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+              } else {
+                throw e;
+              }
+            }
+            return;
+          }
+          const credentialActivate = req.url?.match(
+            /^\/api\/v1\/credentials\/([^/]+)\/activate$/,
+          );
+          if (req.method === "POST" && credentialActivate) {
+            const actorId = req.headers["x-actor-id"] as string | undefined;
+            if (!actorId) {
+              reply(res, 401, {
+                error: {
+                  code: "UNAUTHENTICATED",
+                  message: "Actor required",
+                  correlation_id: cid,
+                  details: {},
+                },
+              });
+              return;
+            }
+            const c = await pool.query(
+              "UPDATE credentials SET status='ACTIVE' WHERE id=$1 AND status='PENDING' RETURNING id,status",
+              [credentialActivate[1]],
+            );
+            if (!c.rowCount) {
+              reply(res, 409, {
+                error: {
+                  code: "INVALID_CREDENTIAL_TRANSITION",
+                  message: "Credential is not pending",
+                  correlation_id: cid,
+                  details: {},
+                },
+              });
+              return;
+            }
+            await pool.query(
+              "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialActivated','CREDENTIAL',$2,$3)",
+              [actorId, credentialActivate[1], cid],
+            );
+            reply(res, 200, { data: c.rows[0] });
+            return;
+          }
           reply(res, 404, {
             error: {
               code: "BUSINESS_NOT_FOUND",
@@ -557,6 +900,119 @@ const server = createServer(async (req, res) => {
           ],
         );
         reply(res, 200, { data: { id, status: target } });
+        return;
+      }
+      const credentialLink = req.url?.match(
+        /^\/api\/v1\/users\/([^/]+)\/credentials$/,
+      );
+      if (req.method === "POST" && credentialLink) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        if (
+          actorId !== credentialLink[1] &&
+          !req.headers["x-platform-actor-id"]
+        ) {
+          reply(res, 403, {
+            error: {
+              code: "FORBIDDEN",
+              message: "Credential scope denied",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const input = await body(req);
+        if (
+          typeof input.public_reference !== "string" ||
+          !input.public_reference.trim()
+        ) {
+          reply(res, 400, {
+            error: {
+              code: "INVALID_INPUT",
+              message: "public_reference is required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        try {
+          const c = await pool.query(
+            "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'PENDING') RETURNING id,user_id,type,public_reference,status",
+            [
+              credentialLink[1],
+              input.type ?? "NFC",
+              input.public_reference.trim(),
+            ],
+          );
+          await pool.query(
+            "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialLinked','CREDENTIAL',$2,$3)",
+            [actorId, c.rows[0].id, cid],
+          );
+          reply(res, 201, { data: c.rows[0] });
+        } catch (e) {
+          if ((e as { code?: string }).code === "23505") {
+            reply(res, 409, {
+              error: {
+                code: "CREDENTIAL_ALREADY_LINKED",
+                message: "Credential reference already linked",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+          } else {
+            throw e;
+          }
+        }
+        return;
+      }
+      const credentialActivate = req.url?.match(
+        /^\/api\/v1\/credentials\/([^/]+)\/activate$/,
+      );
+      if (req.method === "POST" && credentialActivate) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const c = await pool.query(
+          "UPDATE credentials SET status='ACTIVE' WHERE id=$1 AND status='PENDING' RETURNING id,status",
+          [credentialActivate[1]],
+        );
+        if (!c.rowCount) {
+          reply(res, 409, {
+            error: {
+              code: "INVALID_CREDENTIAL_TRANSITION",
+              message: "Credential is not pending",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        await pool.query(
+          "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialActivated','CREDENTIAL',$2,$3)",
+          [actorId, credentialActivate[1], cid],
+        );
+        reply(res, 200, { data: c.rows[0] });
         return;
       }
       reply(res, 404, {
@@ -763,6 +1219,119 @@ const server = createServer(async (req, res) => {
             [id],
           );
           if (!b.rowCount) {
+            const credentialLink = req.url?.match(
+              /^\/api\/v1\/users\/([^/]+)\/credentials$/,
+            );
+            if (req.method === "POST" && credentialLink) {
+              const actorId = req.headers["x-actor-id"] as string | undefined;
+              if (!actorId) {
+                reply(res, 401, {
+                  error: {
+                    code: "UNAUTHENTICATED",
+                    message: "Actor required",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              if (
+                actorId !== credentialLink[1] &&
+                !req.headers["x-platform-actor-id"]
+              ) {
+                reply(res, 403, {
+                  error: {
+                    code: "FORBIDDEN",
+                    message: "Credential scope denied",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              const input = await body(req);
+              if (
+                typeof input.public_reference !== "string" ||
+                !input.public_reference.trim()
+              ) {
+                reply(res, 400, {
+                  error: {
+                    code: "INVALID_INPUT",
+                    message: "public_reference is required",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              try {
+                const c = await pool.query(
+                  "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'PENDING') RETURNING id,user_id,type,public_reference,status",
+                  [
+                    credentialLink[1],
+                    input.type ?? "NFC",
+                    input.public_reference.trim(),
+                  ],
+                );
+                await pool.query(
+                  "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialLinked','CREDENTIAL',$2,$3)",
+                  [actorId, c.rows[0].id, cid],
+                );
+                reply(res, 201, { data: c.rows[0] });
+              } catch (e) {
+                if ((e as { code?: string }).code === "23505") {
+                  reply(res, 409, {
+                    error: {
+                      code: "CREDENTIAL_ALREADY_LINKED",
+                      message: "Credential reference already linked",
+                      correlation_id: cid,
+                      details: {},
+                    },
+                  });
+                } else {
+                  throw e;
+                }
+              }
+              return;
+            }
+            const credentialActivate = req.url?.match(
+              /^\/api\/v1\/credentials\/([^/]+)\/activate$/,
+            );
+            if (req.method === "POST" && credentialActivate) {
+              const actorId = req.headers["x-actor-id"] as string | undefined;
+              if (!actorId) {
+                reply(res, 401, {
+                  error: {
+                    code: "UNAUTHENTICATED",
+                    message: "Actor required",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              const c = await pool.query(
+                "UPDATE credentials SET status='ACTIVE' WHERE id=$1 AND status='PENDING' RETURNING id,status",
+                [credentialActivate[1]],
+              );
+              if (!c.rowCount) {
+                reply(res, 409, {
+                  error: {
+                    code: "INVALID_CREDENTIAL_TRANSITION",
+                    message: "Credential is not pending",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              await pool.query(
+                "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialActivated','CREDENTIAL',$2,$3)",
+                [actorId, credentialActivate[1], cid],
+              );
+              reply(res, 200, { data: c.rows[0] });
+              return;
+            }
             reply(res, 404, {
               error: {
                 code: "BUSINESS_NOT_FOUND",
@@ -821,6 +1390,119 @@ const server = createServer(async (req, res) => {
             ],
           );
           reply(res, 200, { data: { id, status: target } });
+          return;
+        }
+        const credentialLink = req.url?.match(
+          /^\/api\/v1\/users\/([^/]+)\/credentials$/,
+        );
+        if (req.method === "POST" && credentialLink) {
+          const actorId = req.headers["x-actor-id"] as string | undefined;
+          if (!actorId) {
+            reply(res, 401, {
+              error: {
+                code: "UNAUTHENTICATED",
+                message: "Actor required",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          if (
+            actorId !== credentialLink[1] &&
+            !req.headers["x-platform-actor-id"]
+          ) {
+            reply(res, 403, {
+              error: {
+                code: "FORBIDDEN",
+                message: "Credential scope denied",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          const input = await body(req);
+          if (
+            typeof input.public_reference !== "string" ||
+            !input.public_reference.trim()
+          ) {
+            reply(res, 400, {
+              error: {
+                code: "INVALID_INPUT",
+                message: "public_reference is required",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          try {
+            const c = await pool.query(
+              "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'PENDING') RETURNING id,user_id,type,public_reference,status",
+              [
+                credentialLink[1],
+                input.type ?? "NFC",
+                input.public_reference.trim(),
+              ],
+            );
+            await pool.query(
+              "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialLinked','CREDENTIAL',$2,$3)",
+              [actorId, c.rows[0].id, cid],
+            );
+            reply(res, 201, { data: c.rows[0] });
+          } catch (e) {
+            if ((e as { code?: string }).code === "23505") {
+              reply(res, 409, {
+                error: {
+                  code: "CREDENTIAL_ALREADY_LINKED",
+                  message: "Credential reference already linked",
+                  correlation_id: cid,
+                  details: {},
+                },
+              });
+            } else {
+              throw e;
+            }
+          }
+          return;
+        }
+        const credentialActivate = req.url?.match(
+          /^\/api\/v1\/credentials\/([^/]+)\/activate$/,
+        );
+        if (req.method === "POST" && credentialActivate) {
+          const actorId = req.headers["x-actor-id"] as string | undefined;
+          if (!actorId) {
+            reply(res, 401, {
+              error: {
+                code: "UNAUTHENTICATED",
+                message: "Actor required",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          const c = await pool.query(
+            "UPDATE credentials SET status='ACTIVE' WHERE id=$1 AND status='PENDING' RETURNING id,status",
+            [credentialActivate[1]],
+          );
+          if (!c.rowCount) {
+            reply(res, 409, {
+              error: {
+                code: "INVALID_CREDENTIAL_TRANSITION",
+                message: "Credential is not pending",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          await pool.query(
+            "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialActivated','CREDENTIAL',$2,$3)",
+            [actorId, credentialActivate[1], cid],
+          );
+          reply(res, 200, { data: c.rows[0] });
           return;
         }
         reply(res, 404, {
@@ -948,6 +1630,119 @@ const server = createServer(async (req, res) => {
       id,
     ]);
     if (!b.rowCount) {
+      const credentialLink = req.url?.match(
+        /^\/api\/v1\/users\/([^/]+)\/credentials$/,
+      );
+      if (req.method === "POST" && credentialLink) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        if (
+          actorId !== credentialLink[1] &&
+          !req.headers["x-platform-actor-id"]
+        ) {
+          reply(res, 403, {
+            error: {
+              code: "FORBIDDEN",
+              message: "Credential scope denied",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const input = await body(req);
+        if (
+          typeof input.public_reference !== "string" ||
+          !input.public_reference.trim()
+        ) {
+          reply(res, 400, {
+            error: {
+              code: "INVALID_INPUT",
+              message: "public_reference is required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        try {
+          const c = await pool.query(
+            "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'PENDING') RETURNING id,user_id,type,public_reference,status",
+            [
+              credentialLink[1],
+              input.type ?? "NFC",
+              input.public_reference.trim(),
+            ],
+          );
+          await pool.query(
+            "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialLinked','CREDENTIAL',$2,$3)",
+            [actorId, c.rows[0].id, cid],
+          );
+          reply(res, 201, { data: c.rows[0] });
+        } catch (e) {
+          if ((e as { code?: string }).code === "23505") {
+            reply(res, 409, {
+              error: {
+                code: "CREDENTIAL_ALREADY_LINKED",
+                message: "Credential reference already linked",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+          } else {
+            throw e;
+          }
+        }
+        return;
+      }
+      const credentialActivate = req.url?.match(
+        /^\/api\/v1\/credentials\/([^/]+)\/activate$/,
+      );
+      if (req.method === "POST" && credentialActivate) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const c = await pool.query(
+          "UPDATE credentials SET status='ACTIVE' WHERE id=$1 AND status='PENDING' RETURNING id,status",
+          [credentialActivate[1]],
+        );
+        if (!c.rowCount) {
+          reply(res, 409, {
+            error: {
+              code: "INVALID_CREDENTIAL_TRANSITION",
+              message: "Credential is not pending",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        await pool.query(
+          "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialActivated','CREDENTIAL',$2,$3)",
+          [actorId, credentialActivate[1], cid],
+        );
+        reply(res, 200, { data: c.rows[0] });
+        return;
+      }
       reply(res, 404, {
         error: {
           code: "BUSINESS_NOT_FOUND",
@@ -1004,6 +1799,112 @@ const server = createServer(async (req, res) => {
       ],
     );
     reply(res, 200, { data: { id, status: target } });
+    return;
+  }
+  const credentialLink = req.url?.match(
+    /^\/api\/v1\/users\/([^/]+)\/credentials$/,
+  );
+  if (req.method === "POST" && credentialLink) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    if (actorId !== credentialLink[1] && !req.headers["x-platform-actor-id"]) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN",
+          message: "Credential scope denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const input = await body(req);
+    if (
+      typeof input.public_reference !== "string" ||
+      !input.public_reference.trim()
+    ) {
+      reply(res, 400, {
+        error: {
+          code: "INVALID_INPUT",
+          message: "public_reference is required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    try {
+      const c = await pool.query(
+        "INSERT INTO credentials (user_id,type,public_reference,status) VALUES ($1,$2,$3,'PENDING') RETURNING id,user_id,type,public_reference,status",
+        [credentialLink[1], input.type ?? "NFC", input.public_reference.trim()],
+      );
+      await pool.query(
+        "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialLinked','CREDENTIAL',$2,$3)",
+        [actorId, c.rows[0].id, cid],
+      );
+      reply(res, 201, { data: c.rows[0] });
+    } catch (e) {
+      if ((e as { code?: string }).code === "23505") {
+        reply(res, 409, {
+          error: {
+            code: "CREDENTIAL_ALREADY_LINKED",
+            message: "Credential reference already linked",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+      } else {
+        throw e;
+      }
+    }
+    return;
+  }
+  const credentialActivate = req.url?.match(
+    /^\/api\/v1\/credentials\/([^/]+)\/activate$/,
+  );
+  if (req.method === "POST" && credentialActivate) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const c = await pool.query(
+      "UPDATE credentials SET status='ACTIVE' WHERE id=$1 AND status='PENDING' RETURNING id,status",
+      [credentialActivate[1]],
+    );
+    if (!c.rowCount) {
+      reply(res, 409, {
+        error: {
+          code: "INVALID_CREDENTIAL_TRANSITION",
+          message: "Credential is not pending",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    await pool.query(
+      "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,'CredentialActivated','CREDENTIAL',$2,$3)",
+      [actorId, credentialActivate[1], cid],
+    );
+    reply(res, 200, { data: c.rows[0] });
     return;
   }
   reply(res, 404, {

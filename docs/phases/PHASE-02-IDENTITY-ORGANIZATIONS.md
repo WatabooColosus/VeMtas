@@ -1,6 +1,6 @@
 # PHASE-02 — Identity + Organizations + Audit
 
-Status: NOT_STARTED
+Status: GATE_REVIEW
 
 ## Entregables
 

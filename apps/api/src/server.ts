@@ -288,6 +288,91 @@ const server = createServer(async (req, res) => {
           );
           if (!old.rowCount) {
             await client.query("ROLLBACK");
+            const businessAction = req.url?.match(
+              /^\/api\/v1\/businesses\/([^/]+)\/(submit|approve|activate|suspend)$/,
+            );
+            if (req.method === "POST" && businessAction) {
+              const actorId = req.headers["x-actor-id"] as string | undefined;
+              if (!actorId) {
+                reply(res, 401, {
+                  error: {
+                    code: "UNAUTHENTICATED",
+                    message: "Actor required",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              const id = businessAction[1],
+                action = businessAction[2];
+              const b = await pool.query(
+                "SELECT status FROM businesses WHERE id=$1",
+                [id],
+              );
+              if (!b.rowCount) {
+                reply(res, 404, {
+                  error: {
+                    code: "BUSINESS_NOT_FOUND",
+                    message: "Business not found",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              const role = await pool.query(
+                "SELECT role FROM business_memberships WHERE business_id=$1 AND user_id=$2 AND status='ACTIVE'",
+                [id, actorId],
+              );
+              const current = b.rows[0].status;
+              const platform = actorId === req.headers["x-platform-actor-id"];
+              const target =
+                action === "submit"
+                  ? "PENDING_VERIFICATION"
+                  : action === "approve"
+                    ? "VERIFIED"
+                    : action === "activate"
+                      ? "ACTIVE"
+                      : "SUSPENDED";
+              const allowed =
+                (action === "submit" &&
+                  role.rows.some(
+                    (r: { role: string }) => r.role === "BUSINESS_OWNER",
+                  ) &&
+                  current === "DRAFT") ||
+                (action === "approve" &&
+                  platform &&
+                  current === "UNDER_REVIEW") ||
+                (action === "activate" && platform && current === "VERIFIED") ||
+                (action === "suspend" && platform && current === "ACTIVE");
+              if (!allowed) {
+                reply(res, 403, {
+                  error: {
+                    code: "FORBIDDEN_OR_INVALID_TRANSITION",
+                    message: "Business operation denied",
+                    correlation_id: cid,
+                    details: {},
+                  },
+                });
+                return;
+              }
+              await pool.query("UPDATE businesses SET status=$1 WHERE id=$2", [
+                target,
+                id,
+              ]);
+              await pool.query(
+                "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,$2,'BUSINESS',$3,$4)",
+                [
+                  actorId,
+                  `Business${action[0].toUpperCase() + action.slice(1)}`,
+                  id,
+                  cid,
+                ],
+              );
+              reply(res, 200, { data: { id, status: target } });
+              return;
+            }
             reply(res, 404, {
               error: {
                 code: "CREDENTIAL_NOT_FOUND",
@@ -389,6 +474,89 @@ const server = createServer(async (req, res) => {
           ],
         );
         reply(res, 200, { data: t.rows[0] });
+        return;
+      }
+      const businessAction = req.url?.match(
+        /^\/api\/v1\/businesses\/([^/]+)\/(submit|approve|activate|suspend)$/,
+      );
+      if (req.method === "POST" && businessAction) {
+        const actorId = req.headers["x-actor-id"] as string | undefined;
+        if (!actorId) {
+          reply(res, 401, {
+            error: {
+              code: "UNAUTHENTICATED",
+              message: "Actor required",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const id = businessAction[1],
+          action = businessAction[2];
+        const b = await pool.query(
+          "SELECT status FROM businesses WHERE id=$1",
+          [id],
+        );
+        if (!b.rowCount) {
+          reply(res, 404, {
+            error: {
+              code: "BUSINESS_NOT_FOUND",
+              message: "Business not found",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        const role = await pool.query(
+          "SELECT role FROM business_memberships WHERE business_id=$1 AND user_id=$2 AND status='ACTIVE'",
+          [id, actorId],
+        );
+        const current = b.rows[0].status;
+        const platform = actorId === req.headers["x-platform-actor-id"];
+        const target =
+          action === "submit"
+            ? "PENDING_VERIFICATION"
+            : action === "approve"
+              ? "VERIFIED"
+              : action === "activate"
+                ? "ACTIVE"
+                : "SUSPENDED";
+        const allowed =
+          (action === "submit" &&
+            role.rows.some(
+              (r: { role: string }) => r.role === "BUSINESS_OWNER",
+            ) &&
+            current === "DRAFT") ||
+          (action === "approve" && platform && current === "UNDER_REVIEW") ||
+          (action === "activate" && platform && current === "VERIFIED") ||
+          (action === "suspend" && platform && current === "ACTIVE");
+        if (!allowed) {
+          reply(res, 403, {
+            error: {
+              code: "FORBIDDEN_OR_INVALID_TRANSITION",
+              message: "Business operation denied",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
+        await pool.query("UPDATE businesses SET status=$1 WHERE id=$2", [
+          target,
+          id,
+        ]);
+        await pool.query(
+          "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,$2,'BUSINESS',$3,$4)",
+          [
+            actorId,
+            `Business${action[0].toUpperCase() + action.slice(1)}`,
+            id,
+            cid,
+          ],
+        );
+        reply(res, 200, { data: { id, status: target } });
         return;
       }
       reply(res, 404, {
@@ -572,6 +740,89 @@ const server = createServer(async (req, res) => {
       );
       if (!old.rowCount) {
         await client.query("ROLLBACK");
+        const businessAction = req.url?.match(
+          /^\/api\/v1\/businesses\/([^/]+)\/(submit|approve|activate|suspend)$/,
+        );
+        if (req.method === "POST" && businessAction) {
+          const actorId = req.headers["x-actor-id"] as string | undefined;
+          if (!actorId) {
+            reply(res, 401, {
+              error: {
+                code: "UNAUTHENTICATED",
+                message: "Actor required",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          const id = businessAction[1],
+            action = businessAction[2];
+          const b = await pool.query(
+            "SELECT status FROM businesses WHERE id=$1",
+            [id],
+          );
+          if (!b.rowCount) {
+            reply(res, 404, {
+              error: {
+                code: "BUSINESS_NOT_FOUND",
+                message: "Business not found",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          const role = await pool.query(
+            "SELECT role FROM business_memberships WHERE business_id=$1 AND user_id=$2 AND status='ACTIVE'",
+            [id, actorId],
+          );
+          const current = b.rows[0].status;
+          const platform = actorId === req.headers["x-platform-actor-id"];
+          const target =
+            action === "submit"
+              ? "PENDING_VERIFICATION"
+              : action === "approve"
+                ? "VERIFIED"
+                : action === "activate"
+                  ? "ACTIVE"
+                  : "SUSPENDED";
+          const allowed =
+            (action === "submit" &&
+              role.rows.some(
+                (r: { role: string }) => r.role === "BUSINESS_OWNER",
+              ) &&
+              current === "DRAFT") ||
+            (action === "approve" && platform && current === "UNDER_REVIEW") ||
+            (action === "activate" && platform && current === "VERIFIED") ||
+            (action === "suspend" && platform && current === "ACTIVE");
+          if (!allowed) {
+            reply(res, 403, {
+              error: {
+                code: "FORBIDDEN_OR_INVALID_TRANSITION",
+                message: "Business operation denied",
+                correlation_id: cid,
+                details: {},
+              },
+            });
+            return;
+          }
+          await pool.query("UPDATE businesses SET status=$1 WHERE id=$2", [
+            target,
+            id,
+          ]);
+          await pool.query(
+            "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,$2,'BUSINESS',$3,$4)",
+            [
+              actorId,
+              `Business${action[0].toUpperCase() + action.slice(1)}`,
+              id,
+              cid,
+            ],
+          );
+          reply(res, 200, { data: { id, status: target } });
+          return;
+        }
         reply(res, 404, {
           error: {
             code: "CREDENTIAL_NOT_FOUND",
@@ -673,6 +924,86 @@ const server = createServer(async (req, res) => {
       ],
     );
     reply(res, 200, { data: t.rows[0] });
+    return;
+  }
+  const businessAction = req.url?.match(
+    /^\/api\/v1\/businesses\/([^/]+)\/(submit|approve|activate|suspend)$/,
+  );
+  if (req.method === "POST" && businessAction) {
+    const actorId = req.headers["x-actor-id"] as string | undefined;
+    if (!actorId) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Actor required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const id = businessAction[1],
+      action = businessAction[2];
+    const b = await pool.query("SELECT status FROM businesses WHERE id=$1", [
+      id,
+    ]);
+    if (!b.rowCount) {
+      reply(res, 404, {
+        error: {
+          code: "BUSINESS_NOT_FOUND",
+          message: "Business not found",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const role = await pool.query(
+      "SELECT role FROM business_memberships WHERE business_id=$1 AND user_id=$2 AND status='ACTIVE'",
+      [id, actorId],
+    );
+    const current = b.rows[0].status;
+    const platform = actorId === req.headers["x-platform-actor-id"];
+    const target =
+      action === "submit"
+        ? "PENDING_VERIFICATION"
+        : action === "approve"
+          ? "VERIFIED"
+          : action === "activate"
+            ? "ACTIVE"
+            : "SUSPENDED";
+    const allowed =
+      (action === "submit" &&
+        role.rows.some((r: { role: string }) => r.role === "BUSINESS_OWNER") &&
+        current === "DRAFT") ||
+      (action === "approve" && platform && current === "UNDER_REVIEW") ||
+      (action === "activate" && platform && current === "VERIFIED") ||
+      (action === "suspend" && platform && current === "ACTIVE");
+    if (!allowed) {
+      reply(res, 403, {
+        error: {
+          code: "FORBIDDEN_OR_INVALID_TRANSITION",
+          message: "Business operation denied",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    await pool.query("UPDATE businesses SET status=$1 WHERE id=$2", [
+      target,
+      id,
+    ]);
+    await pool.query(
+      "INSERT INTO audit_events (actor_type,actor_id,action,resource_type,resource_id,correlation_id) VALUES ('USER',$1,$2,'BUSINESS',$3,$4)",
+      [
+        actorId,
+        `Business${action[0].toUpperCase() + action.slice(1)}`,
+        id,
+        cid,
+      ],
+    );
+    reply(res, 200, { data: { id, status: target } });
     return;
   }
   reply(res, 404, {

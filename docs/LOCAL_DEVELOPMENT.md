@@ -1,6 +1,7 @@
 # VeMtas local scaffold
 
 ## Requisitos
+
 Node.js 24, pnpm 11 y Docker.
 
 ## Arranque

@@ -1,1 +1,27 @@
-{"name":"@vemtas/db","version":"0.1.0","private":true,"type":"module","scripts":{"build":"tsc -p tsconfig.json","lint":"prettier --check src","typecheck":"tsc --noEmit -p tsconfig.json","test":"vitest run","db:generate":"drizzle-kit generate","db:migrate":"tsx src/migrate.ts","migration-from-zero":"tsx src/migrate.ts"},"dependencies":{"@vemtas/config":"workspace:*","pg":"8.16.3"},"devDependencies":{"@types/node":"24.5.2","@types/pg":"8.15.5","drizzle-kit":"0.31.4","tsx":"4.20.5","typescript":"5.9.2","vitest":"3.2.4"}}
+{
+  "name": "@vemtas/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "prettier --check src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/migrate.ts",
+    "migration-from-zero": "tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "@vemtas/config": "workspace:*",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.5.2",
+    "@types/pg": "8.15.5",
+    "drizzle-kit": "0.31.4",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

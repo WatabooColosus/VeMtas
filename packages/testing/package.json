@@ -1,1 +1,22 @@
-{"name":"@vemtas/testing","version":"0.1.0","private":true,"type":"module","scripts":{"build":"tsc -p tsconfig.json","lint":"prettier --check src","typecheck":"tsc --noEmit -p tsconfig.json","test":"vitest run","test:unit":"vitest run","test:integration":"tsx src/integration.ts"},"devDependencies":{"@types/node":"24.5.2","@types/pg":"8.15.5","pg":"8.16.3","tsx":"4.20.5","typescript":"5.9.2","vitest":"3.2.4"}}
+{
+  "name": "@vemtas/testing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "prettier --check src",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "tsx src/integration.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.5.2",
+    "@types/pg": "8.15.5",
+    "pg": "8.16.3",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

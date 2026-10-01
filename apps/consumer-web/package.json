@@ -1,1 +1,14 @@
-{"name":"@vemtas/consumer-web","version":"0.1.0","private":true,"scripts":{"build":"tsc --noEmit","lint":"prettier --check .","typecheck":"tsc --noEmit","test":"echo shell-test-ok"},"devDependencies":{"typescript":"5.9.2"}}
+{
+  "name": "@vemtas/consumer-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "echo shell-test-ok"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2"
+  }
+}

@@ -3,6 +3,18 @@ on: [push, pull_request]
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vemtas
+          POSTGRES_PASSWORD: vemtas
+          POSTGRES_DB: vemtas_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U vemtas -d vemtas_test"
+          --health-interval 3s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -10,7 +22,13 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm migration-from-zero
+        env:
+          DATABASE_URL: postgresql://vemtas:vemtas@localhost:5433/vemtas_test
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://vemtas:vemtas@localhost:5433/vemtas_test
       - run: pnpm build

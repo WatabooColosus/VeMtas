@@ -1,1 +1,1 @@
-export type HealthResponse={status:"ok";service:string;version:string};
+export type HealthResponse = { status: "ok"; service: string; version: string };

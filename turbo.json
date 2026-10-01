@@ -1,1 +1,8 @@
-{"tasks":{"build":{"dependsOn":["^build"],"outputs":["dist/**"]},"lint":{"dependsOn":["^lint"]},"typecheck":{"dependsOn":["^typecheck"]},"test":{"dependsOn":["^test"]}}}
+{
+  "tasks": {
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "lint": { "dependsOn": ["^lint"] },
+    "typecheck": { "dependsOn": ["^typecheck"] },
+    "test": { "dependsOn": ["^test"] }
+  }
+}

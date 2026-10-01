@@ -1,1 +1,4 @@
-{"compilerOptions":{"noEmit":true,"strict":true,"target":"ES2022"},"include":["index.ts"]}
+{
+  "compilerOptions": { "noEmit": true, "strict": true, "target": "ES2022" },
+  "include": ["index.ts"]
+}

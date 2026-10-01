@@ -126,6 +126,39 @@ const server = createServer(async (req, res) => {
       return;
     }
   }
+  if (req.method === "POST" && req.url === "/api/v1/auth/sessions/revoke") {
+    const token = req.headers["authorization"]
+      ?.toString()
+      .replace(/^Bearer\s+/i, "");
+    if (!token) {
+      reply(res, 401, {
+        error: {
+          code: "UNAUTHENTICATED",
+          message: "Bearer session required",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    const revoked = await pool.query(
+      "UPDATE sessions SET revoked_at=now() WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now() RETURNING id,revoked_at",
+      [sessionTokenHash(token)],
+    );
+    if (!revoked.rowCount) {
+      reply(res, 401, {
+        error: {
+          code: "SESSION_INVALID",
+          message: "Session is invalid or already revoked",
+          correlation_id: cid,
+          details: {},
+        },
+      });
+      return;
+    }
+    reply(res, 200, { data: revoked.rows[0] });
+    return;
+  }
   if (
     req.method === "POST" &&
     req.url?.match(/^\/api\/v1\/me\/credentials\/[^/]+\/block$/)

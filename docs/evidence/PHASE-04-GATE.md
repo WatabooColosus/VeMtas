@@ -30,6 +30,8 @@ The first money slice now includes `payment_intents`, `payments`, idempotent int
 
 Financial receipts (`RC`) are created transactionally during balance capture, exposed through `GET /receipts/:id`, and migration `0009` adds reconciliation records. Provider reconciliation execution remains pending.
 
+The integration harness now verifies ledger-derived balance projection: a 1,000 COP credit projects 1,000 COP and a balanced 400 COP debit projects 600 COP without editing any balance column.
+
 `POST /control/reconciliations` now records matched or mismatched periods with difference and audit event; it does not mutate ledger history.
 
 Manual local runtime evidence: API `/ready` returned HTTP 200; unauthenticated reconciliation returned HTTP 403; authenticated platform reconciliation returned HTTP 201 with `MATCHED` and zero difference. The experimental child-process HTTP harness is retained for repair but is not part of the green integration command because Windows process-tree cleanup is not yet deterministic.

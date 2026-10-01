@@ -49,6 +49,34 @@ const count = await pool.query(
   "SELECT count(*)::int AS count FROM topups WHERE idempotency_key=$1",
   [key],
 );
+const beforeBalance = await pool.query(
+  "SELECT COALESCE(sum(CASE WHEN le.direction='CREDIT' THEN le.amount_minor ELSE -le.amount_minor END),0)::bigint AS balance FROM ledger_entries le WHERE le.financial_account_id=$1",
+  [account.rows[0].id],
+);
+if (beforeBalance.rows[0].balance !== "1000")
+  throw new Error(
+    `unexpected projected balance: ${beforeBalance.rows[0].balance}`,
+  );
+const debitClient = await pool.connect();
+await debitClient.query("BEGIN");
+const debitTxn = await debitClient.query(
+  "INSERT INTO ledger_transactions (transaction_type,reference_type,idempotency_key) VALUES ('PAYMENT','PAYMENT_INTENT',$1) RETURNING id",
+  [`debit-${Date.now()}`],
+);
+await debitClient.query(
+  "INSERT INTO ledger_entries (ledger_transaction_id,financial_account_id,direction,amount_minor,currency) VALUES ($1,$2,'DEBIT',400,'COP'),($1,$3,'CREDIT',400,'COP')",
+  [debitTxn.rows[0].id, account.rows[0].id, system.rows[0].id],
+);
+await debitClient.query("COMMIT");
+debitClient.release();
+const afterBalance = await pool.query(
+  "SELECT COALESCE(sum(CASE WHEN le.direction='CREDIT' THEN le.amount_minor ELSE -le.amount_minor END),0)::bigint AS balance FROM ledger_entries le WHERE le.financial_account_id=$1",
+  [account.rows[0].id],
+);
+if (afterBalance.rows[0].balance !== "600")
+  throw new Error(
+    `unexpected debited balance: ${afterBalance.rows[0].balance}`,
+  );
 const imbalance = await pool.query(
   "SELECT lt.id FROM ledger_transactions lt JOIN ledger_entries le ON le.ledger_transaction_id=lt.id WHERE lt.idempotency_key=$1 GROUP BY lt.id HAVING sum(CASE WHEN le.direction='DEBIT' THEN le.amount_minor ELSE 0 END) <> sum(CASE WHEN le.direction='CREDIT' THEN le.amount_minor ELSE 0 END)",
   [key],

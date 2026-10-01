@@ -2931,12 +2931,28 @@ const server = createServer(async (req, res) => {
         [captureLink[1]],
       );
       if (existing.rowCount) {
+        const owner = await client.query(
+          "SELECT user_id FROM payment_intents WHERE id=$1",
+          [captureLink[1]],
+        );
+        if (!owner.rowCount || owner.rows[0].user_id !== actorId) {
+          await client.query("ROLLBACK");
+          reply(res, 403, {
+            error: {
+              code: "PAYMENT_SCOPE_DENIED",
+              message: "Payment intent scope denied",
+              correlation_id: cid,
+              details: {},
+            },
+          });
+          return;
+        }
         await client.query("COMMIT");
         reply(res, 200, { data: existing.rows[0], idempotent: true });
         return;
       }
       const intent = await client.query(
-        "SELECT i.id,i.user_id,i.business_id,i.amount_minor,i.currency,i.status,b.status AS business_status FROM payment_intents i JOIN businesses b ON b.id=i.business_id WHERE i.id=$1 FOR UPDATE",
+        "SELECT i.id,i.user_id,i.business_id,i.sale_id,i.amount_minor,i.currency,i.status,(i.expires_at IS NOT NULL AND i.expires_at <= now()) AS expired,b.status AS business_status FROM payment_intents i JOIN businesses b ON b.id=i.business_id WHERE i.id=$1 FOR UPDATE",
         [captureLink[1]],
       );
       if (!intent.rowCount || intent.rows[0].user_id !== actorId) {
@@ -2963,7 +2979,7 @@ const server = createServer(async (req, res) => {
         });
         return;
       }
-      if (intent.rows[0].status !== "CREATED") {
+      if (intent.rows[0].status !== "CREATED" || intent.rows[0].expired) {
         await client.query("ROLLBACK");
         reply(res, 409, {
           error: {

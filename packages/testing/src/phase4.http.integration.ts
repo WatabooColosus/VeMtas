@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { Pool } from "pg";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const child = spawn(
@@ -83,6 +84,42 @@ try {
   console.log(
     "phase-04 HTTP integration: health/readiness, platform authorization and reconciliation PASS",
   );
+  const pool = new Pool({
+    connectionString:
+      process.env.TEST_DATABASE_URL ??
+      "postgresql://vemtas:vemtas@localhost:5433/vemtas_test",
+  });
+  try {
+    const user = await pool.query(
+      "INSERT INTO users (primary_email,status) VALUES ($1,'ACTIVE') RETURNING id",
+      [`http-owner-${Date.now()}@test.invalid`],
+    );
+    const business = await pool.query(
+      "INSERT INTO businesses (name,status) VALUES ('HTTP replay fixture','ACTIVE') RETURNING id",
+    );
+    const intent = await pool.query(
+      "INSERT INTO payment_intents (user_id,business_id,amount_minor,status,idempotency_key) VALUES ($1,$2,100,'CAPTURED',$3) RETURNING id",
+      [user.rows[0].id, business.rows[0].id, `http-replay-${Date.now()}`],
+    );
+    await pool.query(
+      "INSERT INTO payments (payment_intent_id,amount_minor) VALUES ($1,100)",
+      [intent.rows[0].id],
+    );
+    const denied = await fetch(
+      `http://127.0.0.1:39147/api/v1/payment-intents/${intent.rows[0].id}/capture`,
+      {
+        method: "POST",
+        headers: { "x-actor-id": actor, "idempotency-key": "foreign-replay" },
+      },
+    );
+    if (denied.status !== 403)
+      throw new Error(`foreign capture replay returned ${denied.status}`);
+    console.log(
+      "phase-04 HTTP integration: foreign capture replay denied PASS",
+    );
+  } finally {
+    await pool.end();
+  }
 } finally {
   child.kill();
 }

@@ -2661,6 +2661,29 @@ const server = createServer(async (req, res) => {
         });
         return;
       }
+      const platformActor = req.headers["x-platform-actor-id"] as
+        | string
+        | undefined;
+      const authorized = platformActor
+        ? true
+        : (
+            await client.query(
+              "SELECT 1 FROM cash_payments cp JOIN sales s ON s.id=cp.sale_id JOIN business_memberships m ON m.business_id=s.business_id WHERE cp.id=$1 AND m.user_id=$2 AND m.status='ACTIVE' AND m.role IN ('BUSINESS_OWNER','BUSINESS_ADMIN') LIMIT 1",
+              [refundLink[1], actorId],
+            )
+          ).rowCount === 1;
+      if (!authorized) {
+        await client.query("ROLLBACK");
+        reply(res, 403, {
+          error: {
+            code: "REFUND_SCOPE_DENIED",
+            message: "Refund requires platform or business administrator scope",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
       const amount = Number(input.amount_minor ?? payment.rows[0].amount_minor);
       if (!Number.isSafeInteger(amount) || amount <= 0) {
         await client.query("ROLLBACK");
@@ -2913,7 +2936,7 @@ const server = createServer(async (req, res) => {
         return;
       }
       const intent = await client.query(
-        "SELECT id,user_id,business_id,amount_minor,currency,status FROM payment_intents WHERE id=$1 FOR UPDATE",
+        "SELECT i.id,i.user_id,i.business_id,i.amount_minor,i.currency,i.status,b.status AS business_status FROM payment_intents i JOIN businesses b ON b.id=i.business_id WHERE i.id=$1 FOR UPDATE",
         [captureLink[1]],
       );
       if (!intent.rowCount || intent.rows[0].user_id !== actorId) {
@@ -2922,6 +2945,18 @@ const server = createServer(async (req, res) => {
           error: {
             code: "PAYMENT_SCOPE_DENIED",
             message: "Payment intent scope denied",
+            correlation_id: cid,
+            details: {},
+          },
+        });
+        return;
+      }
+      if (intent.rows[0].business_status !== "ACTIVE") {
+        await client.query("ROLLBACK");
+        reply(res, 409, {
+          error: {
+            code: "BUSINESS_NOT_ACTIVE",
+            message: "Business is not active",
             correlation_id: cid,
             details: {},
           },
